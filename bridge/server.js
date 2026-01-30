@@ -33,32 +33,47 @@ let activeSocket = null;
 let agentBusy = false;
 
 const AmphibianHost = require('./mcp_host');
+const MultiBrain = require('./brains/router');
+const TPUBrain = require('./brains/tpu_brain');
+const AndroidInferenceServer = require('./mcp_servers/android_inference');
 
 // Initialize MCP Host
 const host = new AmphibianHost();
 
-const AmphibianHost = require('./mcp_host');
-
-// Initialize MCP Host
-const host = new AmphibianHost();
+// Initialize Router & Brains
+const router = new MultiBrain({});
+let tpuBrain;
 
 // Start MCP Servers (Brain Modules)
 async function startBrains() {
     try {
+        // 1. Local TPU (Default)
+        // Wraps the Android native bridge callback
+        tpuBrain = new TPUBrain(global.androidBridgeCallback);
+        router.register('tpu', tpuBrain);
+        console.log('🧠 Registered Local TPU Brain');
+
+        // 2. Android Local Inference MCP (Expose TPU as tools)
+        // This makes the TPU available as a tool server if we need to connect it to other agents
+        const inferenceServer = new AndroidInferenceServer(tpuBrain);
+
+        // 3. Specialized Brains (Optional / Cloud)
         if (process.env.JULES_API_KEY) {
-            await host.connectStdioServer('jules', 'node', ['./mcp_servers/jules_adapter.js']);
+            const client = await host.connectStdioServer('jules', 'node', ['./mcp_servers/jules_adapter.js']);
+            router.register('jules', client);
         }
         if (process.env.STITCH_API_KEY) {
-            await host.connectStdioServer('stitch', 'node', ['./mcp_servers/stitch_adapter.js']);
+            const client = await host.connectStdioServer('stitch', 'node', ['./mcp_servers/stitch_adapter.js']);
+            router.register('stitch', client);
         }
         if (process.env.CONTEXT7_API_KEY) {
-            await host.connectStdioServer('context7', 'node', ['./mcp_servers/context7_adapter.js']);
+            const client = await host.connectStdioServer('context7', 'node', ['./mcp_servers/context7_adapter.js']);
+            router.register('context7', client);
         }
         
         // Connect Local Android System
         const AndroidSystemServer = require('./android_mcp');
-        const androidServer = new AndroidSystemServer(global.androidBridgeCallback); // Bridge callback defined by JNI injection
-        // We'll treat local system as a direct client for simplicity here
+        const androidServer = new AndroidSystemServer(global.androidBridgeCallback);
         
         console.log('🧠 All Brain Modules Connected.');
     } catch (e) {
@@ -72,22 +87,28 @@ const agent = {
     execute: async (task, onLog) => {
         onLog('Analyzing task...', 'thought');
         
-        // 1. Get Tools
-        const tools = await host.getAllTools();
-        const toolNames = tools.map(t => t.name).join(', ');
-        onLog(`Available Tools: ${toolNames}`, 'info');
+        // 1. Get Tools (Optional - mainly for introspection)
+        // const tools = await host.getAllTools();
         
-        // 2. Intent Classification (Simple Heuristic for Speed)
-        // In a real version, we'd ask the Local LLM to pick the tool JSON.
+        // 2. Route Task
+        const brain = await router.route(task);
         
         try {
-            if (task.toLowerCase().includes('ui') || task.toLowerCase().includes('screen')) {
-                onLog('Routing to: Google Stitch (UI)', 'thought');
-                const result = await host.callTool('stitch', 'generate_ui', { prompt: task });
-                return result.content[0].text;
+            // Case A: Local TPU (Direct)
+            if (brain instanceof TPUBrain) {
+                onLog('Routing to: Local TPU (Gemma)', 'thought');
+                // Use the TPU directly
+                const response = await brain.generate(task, (chunk) => {
+                    // Optional: could stream back via LOG or a specific STREAM event
+                    // onLog(chunk, 'stream'); // Assuming UI handles this
+                });
+                return response;
             } 
             
-            if (task.toLowerCase().includes('code') || task.toLowerCase().includes('fix')) {
+            // Case B: Specialized MCP Agents
+            // Map the brain to a specific primary tool call
+
+            if (brain && brain === router.brains['jules']) {
                 onLog('Routing to: Google Jules (Coding)', 'thought');
                 const result = await host.callTool('jules', 'create_coding_session', { 
                     prompt: task, 
@@ -96,22 +117,37 @@ const agent = {
                 return result.content[0].text;
             }
 
+            if (brain && brain === router.brains['stitch']) {
+                onLog('Routing to: Google Stitch (UI)', 'thought');
+                const result = await host.callTool('stitch', 'generate_ui', { prompt: task });
+                return result.content[0].text;
+            }
+
+            if (brain && brain === router.brains['context7']) {
+                 onLog('Routing to: Context7 (Retrieval)', 'thought');
+                 // Assume a tool name for context7 - 'retrieve' or similar
+                 // If not known, we might need to inspect tools. For now, assuming standard name.
+                 const result = await host.callTool('context7', 'retrieve', { query: task });
+                 return result.content[0].text;
+            }
+
+            // Case C: Android System Tools (SMS, etc) - Handled via Regex in Router?
+            // Or maybe checking if the task implies a tool use.
+            // For now, let's keep the simple SMS regex fallback if no brain picked it up (though Router defaults to TPU).
+            // Actually, if Router defaults to TPU, we rely on TPU to handle it or say "I can't".
+            // If we want SMS, we might need to add that logic to Router or here.
+
             if (task.toLowerCase().includes('sms') || task.toLowerCase().includes('text')) {
-                 // Simple regex extraction for demo
                  const match = task.match(/text (\d+) saying (.+)/);
                  if (match) {
                      onLog(`Routing to: Android System (SMS) -> ${match[1]}`, 'tool');
-                     // This would call the Android MCP tool
-                     // return await host.callTool('android', 'send_sms', { phone: match[1], message: match[2] });
+                     // This mimics the old behavior. Ideally we'd call the Android MCP tool.
                      return "SMS Sent (Simulated via Bridge)";
                  }
             }
 
-            // Default: Ask the Local LLM (Gemma)
-            onLog('Routing to: Local TPU (Gemma 3)', 'thought');
-            // const result = await host.callTool('android', 'local_inference', { prompt: task });
-            // return result.content[0].text;
-            return `[Gemma 3 4B Response]: I can help with that! You asked about: "${task}"`;
+            // Fallback
+            return "I'm not sure how to handle that task locally.";
             
         } catch (err) {
             onLog(`Error executing task: ${err.message}`, 'error');

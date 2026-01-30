@@ -18,28 +18,28 @@ class MultiBrain {
     }
 
     async route(task, context) {
-        // Simple heuristic router
-        // In the future, this could be an LLM classifier itself
+        // Simple heuristic router for specialized tasks
         
         const text = task.toLowerCase();
 
         // 1. Coding Tasks -> Google Jules
-        if (text.includes('code') || text.includes('refactor') || text.includes('bug')) {
+        if (text.includes('code') || text.includes('refactor') || text.includes('bug') || text.includes('function')) {
             if (this.brains['jules']) return this.brains['jules'];
         }
 
         // 2. High Context / Retrieval -> Context7
-        if (text.includes('search') || text.includes('context') || text.includes('remember')) {
+        if (text.includes('search') || text.includes('context') || text.includes('remember') || text.includes('recall')) {
             if (this.brains['context7']) return this.brains['context7'];
         }
 
-        // 3. Pipeline / Media -> Stitch (Hypothetical usage)
-        if (text.includes('stitch') || text.includes('pipeline')) {
+        // 3. Pipeline / Media -> Stitch
+        if (text.includes('stitch') || text.includes('pipeline') || text.includes('ui') || text.includes('screen')) {
             if (this.brains['stitch']) return this.brains['stitch'];
         }
 
-        // Default -> Local TPU (Gemma)
-        return this.brains['local'] || this.brains['mock'];
+        // Default -> Local TPU
+        // This covers "chat", "explain", "write", and general conversation
+        return this.brains['tpu'] || this.brains['local'] || this.brains['mock'];
     }
 }
 
