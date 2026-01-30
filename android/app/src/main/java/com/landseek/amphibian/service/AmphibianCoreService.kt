@@ -83,9 +83,9 @@ class AmphibianCoreService : Service() {
         }
     }
 
-    private fun connectBridge() {
+    private suspend fun connectBridge() {
         // Wait a moment for Node to boot
-        Thread.sleep(2000)
+        delay(2000)
         
         val client = OkHttpClient.Builder()
             .readTimeout(0, TimeUnit.MILLISECONDS)
