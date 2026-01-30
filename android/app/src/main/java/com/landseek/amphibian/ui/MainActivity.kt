@@ -17,8 +17,28 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import com.landseek.amphibian.service.AmphibianCoreService
 import android.content.Intent
+import android.content.ComponentName
+import android.content.Context
+import android.content.ServiceConnection
+import android.os.IBinder
 
 class MainActivity : ComponentActivity() {
+
+    private var amphibianService: AmphibianCoreService? = null
+    private var isBound = false
+
+    private val connection = object : ServiceConnection {
+        override fun onServiceConnected(className: ComponentName, service: IBinder) {
+            val binder = service as AmphibianCoreService.LocalBinder
+            amphibianService = binder.getService()
+            isBound = true
+        }
+
+        override fun onServiceDisconnected(arg0: ComponentName) {
+            isBound = false
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         
@@ -27,14 +47,31 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             MaterialTheme(colorScheme = darkColorScheme()) {
-                AmphibianApp()
+                AmphibianApp(onSend = { message ->
+                    if (isBound) {
+                        amphibianService?.executeTask(message)
+                    }
+                })
             }
         }
+    }
+
+    override fun onStart() {
+        super.onStart()
+        Intent(this, AmphibianCoreService::class.java).also { intent ->
+            bindService(intent, connection, Context.BIND_AUTO_CREATE)
+        }
+    }
+
+    override fun onStop() {
+        super.onStop()
+        unbindService(connection)
+        isBound = false
     }
 }
 
 @Composable
-fun AmphibianApp() {
+fun AmphibianApp(onSend: (String) -> Unit) {
     var input by remember { mutableStateOf("") }
     val messages = remember { mutableStateListOf<Message>() }
 
@@ -76,7 +113,7 @@ fun AmphibianApp() {
                 keyboardActions = KeyboardActions(onSend = {
                     if (input.isNotBlank()) {
                         messages.add(Message("You", input, false))
-                        // TODO: Send to Service via Bridge
+                        onSend(input)
                         input = ""
                     }
                 })
@@ -84,7 +121,7 @@ fun AmphibianApp() {
             Button(onClick = {
                 if (input.isNotBlank()) {
                     messages.add(Message("You", input, false))
-                    // TODO: Send to Service via Bridge
+                    onSend(input)
                     input = ""
                 }
             }) {

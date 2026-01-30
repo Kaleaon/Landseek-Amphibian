@@ -2,6 +2,7 @@ package com.landseek.amphibian.service
 
 import android.app.Service
 import android.content.Intent
+import android.os.Binder
 import android.os.IBinder
 import android.util.Log
 import kotlinx.coroutines.*
@@ -29,6 +30,18 @@ class AmphibianCoreService : Service() {
     // Config
     private val PORT = 3000
     private val AUTH_TOKEN = "amphibian_local_secret" // In prod, generate this safely
+
+    // Binder given to clients
+    private val binder = LocalBinder()
+
+    /**
+     * Class used for the client Binder.  Because we know this service always
+     * runs in the same process as its clients, we don't need to deal with IPC.
+     */
+    inner class LocalBinder : Binder() {
+        // Return this instance of AmphibianCoreService so clients can call public methods
+        fun getService(): AmphibianCoreService = this@AmphibianCoreService
+    }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         Log.d(TAG, "Amphibian Service Starting...")
@@ -131,8 +144,7 @@ class AmphibianCoreService : Service() {
     }
 
     override fun onBind(intent: Intent?): IBinder? {
-        // TODO: Return Binder for UI communication
-        return null
+        return binder
     }
     
     // Java 9+ ProcessHandle workaround for older Android APIs if needed
