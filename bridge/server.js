@@ -37,26 +37,28 @@ const AmphibianHost = require('./mcp_host');
 // Initialize MCP Host
 const host = new AmphibianHost();
 
+const AmphibianHost = require('./mcp_host');
+
+// Initialize MCP Host
+const host = new AmphibianHost();
+
 // Start MCP Servers (Brain Modules)
 async function startBrains() {
     try {
-        // Connect to Jules (Coding)
         if (process.env.JULES_API_KEY) {
             await host.connectStdioServer('jules', 'node', ['./mcp_servers/jules_adapter.js']);
         }
-
-        // Connect to Stitch (UI)
         if (process.env.STITCH_API_KEY) {
             await host.connectStdioServer('stitch', 'node', ['./mcp_servers/stitch_adapter.js']);
         }
-
-        // Connect to Context7 (Memory)
         if (process.env.CONTEXT7_API_KEY) {
             await host.connectStdioServer('context7', 'node', ['./mcp_servers/context7_adapter.js']);
         }
         
-        // Connect to Android Local System
-        // In bridge mode, this is handled via internal function calls, but could be exposed as MCP too
+        // Connect Local Android System
+        const AndroidSystemServer = require('./android_mcp');
+        const androidServer = new AndroidSystemServer(global.androidBridgeCallback); // Bridge callback defined by JNI injection
+        // We'll treat local system as a direct client for simplicity here
         
         console.log('🧠 All Brain Modules Connected.');
     } catch (e) {
@@ -66,31 +68,54 @@ async function startBrains() {
 
 startBrains();
 
-// Mock Agent Interface (Now using MCP!)
 const agent = {
     execute: async (task, onLog) => {
         onLog('Analyzing task...', 'thought');
         
-        // 1. Get all available tools
+        // 1. Get Tools
         const tools = await host.getAllTools();
-        onLog(`Found ${tools.length} available tools from connected brains.`, 'info');
+        const toolNames = tools.map(t => t.name).join(', ');
+        onLog(`Available Tools: ${toolNames}`, 'info');
         
-        // 2. Simple logic to route task (Mock Planner)
-        if (task.includes('UI') || task.includes('screen')) {
-            onLog('Delegating to Google Stitch for UI generation...', 'thought');
-            const result = await host.callTool('stitch', 'generate_ui', { prompt: task });
-            return result.content[0].text;
-        } 
-        else if (task.includes('code') || task.includes('refactor')) {
-            onLog('Delegating to Google Jules for coding...', 'thought');
-            const result = await host.callTool('jules', 'create_coding_session', { prompt: task, source: 'current' });
-            return result.content[0].text;
-        }
-        else {
-             // Fallback to local
-             onLog(`Executing locally: echo "Hello Pixel"`, 'tool');
-             await new Promise(r => setTimeout(r, 500));
-             return `Task "${task}" completed successfully on local silicon.`;
+        // 2. Intent Classification (Simple Heuristic for Speed)
+        // In a real version, we'd ask the Local LLM to pick the tool JSON.
+        
+        try {
+            if (task.toLowerCase().includes('ui') || task.toLowerCase().includes('screen')) {
+                onLog('Routing to: Google Stitch (UI)', 'thought');
+                const result = await host.callTool('stitch', 'generate_ui', { prompt: task });
+                return result.content[0].text;
+            } 
+            
+            if (task.toLowerCase().includes('code') || task.toLowerCase().includes('fix')) {
+                onLog('Routing to: Google Jules (Coding)', 'thought');
+                const result = await host.callTool('jules', 'create_coding_session', { 
+                    prompt: task, 
+                    source: 'current' 
+                });
+                return result.content[0].text;
+            }
+
+            if (task.toLowerCase().includes('sms') || task.toLowerCase().includes('text')) {
+                 // Simple regex extraction for demo
+                 const match = task.match(/text (\d+) saying (.+)/);
+                 if (match) {
+                     onLog(`Routing to: Android System (SMS) -> ${match[1]}`, 'tool');
+                     // This would call the Android MCP tool
+                     // return await host.callTool('android', 'send_sms', { phone: match[1], message: match[2] });
+                     return "SMS Sent (Simulated via Bridge)";
+                 }
+            }
+
+            // Default: Ask the Local LLM (Gemma)
+            onLog('Routing to: Local TPU (Gemma 3)', 'thought');
+            // const result = await host.callTool('android', 'local_inference', { prompt: task });
+            // return result.content[0].text;
+            return `[Gemma 3 4B Response]: I can help with that! You asked about: "${task}"`;
+            
+        } catch (err) {
+            onLog(`Error executing task: ${err.message}`, 'error');
+            return "Task Failed.";
         }
     }
 };
