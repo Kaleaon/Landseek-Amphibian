@@ -75,6 +75,28 @@ class AndroidSystemServer {
                             },
                             required: ["path"]
                         }
+                    },
+                    {
+                        name: "remember",
+                        description: "Store a fact or concept in local long-term memory (RAG).",
+                        inputSchema: {
+                            type: "object",
+                            properties: {
+                                content: { type: "string", description: "The text to remember" }
+                            },
+                            required: ["content"]
+                        }
+                    },
+                    {
+                        name: "recall",
+                        description: "Retrieve relevant context from local memory.",
+                        inputSchema: {
+                            type: "object",
+                            properties: {
+                                query: { type: "string", description: "What to search for" }
+                            },
+                            required: ["query"]
+                        }
                     }
                     // Add more tools here
                 ]

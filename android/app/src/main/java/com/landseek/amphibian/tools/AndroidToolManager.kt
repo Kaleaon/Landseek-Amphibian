@@ -11,7 +11,7 @@ import java.io.File
 
 /**
  * AndroidToolManager
- * 
+ *
  * Exposes Android system capabilities as executable tools for the Agent.
  * Handles permission checks and native API calls.
  */
@@ -22,6 +22,14 @@ class AndroidToolManager(private val context: Context) {
     data class ToolResult(val success: Boolean, val output: String)
 
     private val llmService = com.landseek.amphibian.service.LocalLLMService(context)
+    private val ragService = com.landseek.amphibian.service.LocalRAGService(context)
+    
+    init {
+        // Init async
+        kotlinx.coroutines.GlobalScope.launch { 
+            ragService.initialize() 
+        }
+    }
 
     fun executeTool(name: String, args: JSONObject): ToolResult {
         return try {
@@ -33,6 +41,8 @@ class AndroidToolManager(private val context: Context) {
                 "get_location" -> getLocation()
                 "open_url" -> openUrl(args.getString("url"))
                 "local_inference" -> runInference(args.getString("prompt"))
+                "remember" -> remember(args.getString("content"))
+                "recall" -> recall(args.getString("query"))
                 else -> ToolResult(false, "Unknown tool: $name")
             }
         } catch (e: Exception) {
@@ -40,14 +50,24 @@ class AndroidToolManager(private val context: Context) {
             ToolResult(false, "Error: ${e.message}")
         }
     }
-    
+
     // ... existing methods ...
+    
+    private fun remember(content: String): ToolResult {
+        val id = kotlinx.coroutines.runBlocking { ragService.addMemory(content) }
+        return ToolResult(true, "Memory stored. ID: $id")
+    }
+    
+    private fun recall(query: String): ToolResult {
+        val context = kotlinx.coroutines.runBlocking { ragService.retrieveContext(query) }
+        return ToolResult(true, context)
+    }
 
     private fun runInference(prompt: String): ToolResult {
         // This is a blocking call in this simple architecture
         // Ideally handled via async/callback, but for MVP:
-        val response = kotlinx.coroutines.runBlocking { 
-            llmService.generate(prompt) 
+        val response = kotlinx.coroutines.runBlocking {
+            llmService.generate(prompt)
         }
         return ToolResult(true, response)
     }
@@ -92,7 +112,7 @@ class AndroidToolManager(private val context: Context) {
         // Placeholder for FusedLocationProvider implementation
         return ToolResult(true, "Lat: 37.7749, Long: -122.4194 (Mock)")
     }
-    
+
     private fun openUrl(url: String): ToolResult {
         val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
         intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
