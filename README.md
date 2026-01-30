@@ -18,18 +18,28 @@ Landseek-Amphibian is a project to merge **Landseek** (the beautiful, TPU-optimi
 - **🧠 Local Intelligence:** Powered by Pixel TPU/NPU via Ollama or TFLite.
 - **🔌 Plugin System:** Add new capabilities just by dropping in a JavaScript file.
 
-## Architecture High-Level
+## 🦎 Adaptive Architecture (One App, Two Modes)
 
-The app runs as a hybrid system:
+Landseek-Amphibian automatically detects device capabilities to choose the best operating mode:
 
-1.  **Frontend (Landseek):** Native Kotlin/Android UI. Handles user input, voice, and rendering.
-2.  **Backend Service (Amphibian Core):** A background Android Service that hosts:
-    *   **Node.js Runtime:** Embedded binary running OpenClaw.
-    *   **The Bridge:** A local WebSocket/HTTP bridge connecting the UI to the Agent.
+### 1. **Host Mode** (High-End / Pixel 10)
+*   **Active:** On devices with powerful NPUs/TPUs (Pixel 9/10, S25, etc.).
+*   **Function:** Runs the full **Gemma 3 4B** model locally via Ollama/TFLite.
+*   **Role:** Acts as a P2P Server, hosting the chatroom and agents for itself and others.
+*   **Privacy:** 100% offline capable.
 
-## Getting Started
+### 2. **Client Mode** (Standard Devices)
+*   **Active:** On older phones or when battery saver is on.
+*   **Function:** Connects to a remote brain (Jules, Context7, or a local P2P Host).
+*   **Role:** Acts as a UI/Sensor terminal. It exposes its tools (Camera, SMS) to the remote brain but doesn't do the heavy thinking.
 
-*(Coming Soon - This project is currently in the architectural design phase)*
+## Key Features
+
+- **📦 Single Install:** One APK for everyone.
+- **📱 Native UI:** 120Hz Jetpack Compose interface.
+- **🔌 MCP Native:** Uses Model Context Protocol for all tool/agent communication.
+- **🧠 Hybrid Brain:** Orchestrates between Local TPU (Gemma), Coding (Jules), and Memory (Context7).
+- **🐸 Amphibious:** Live in the App (UI) and the Shell (Tools).
 
 ## Roadmap
 
