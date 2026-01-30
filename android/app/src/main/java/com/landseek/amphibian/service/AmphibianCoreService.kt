@@ -2,6 +2,7 @@ package com.landseek.amphibian.service
 
 import android.app.Service
 import android.content.Intent
+import android.os.Binder
 import android.os.IBinder
 import android.util.Log
 import kotlinx.coroutines.*
@@ -25,6 +26,7 @@ class AmphibianCoreService : Service() {
     private var nodeProcess: Process? = null
     private var webSocket: WebSocket? = null
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+    private val binder = LocalBinder()
     
     // Config
     private val PORT = 3000
@@ -131,8 +133,11 @@ class AmphibianCoreService : Service() {
     }
 
     override fun onBind(intent: Intent?): IBinder? {
-        // TODO: Return Binder for UI communication
-        return null
+        return binder
+    }
+
+    inner class LocalBinder : Binder() {
+        fun getService(): AmphibianCoreService = this@AmphibianCoreService
     }
     
     // Java 9+ ProcessHandle workaround for older Android APIs if needed
