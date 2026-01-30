@@ -33,32 +33,37 @@ let activeSocket = null;
 let agentBusy = false;
 
 const AmphibianHost = require('./mcp_host');
+const MultiBrainRouter = require('./brains/router');
+const LocalBrain = require('./brains/local_brain');
+const ConversationMemory = require('./brains/memory');
 
-// Initialize MCP Host
+// Initialize Components
 const host = new AmphibianHost();
-
-const AmphibianHost = require('./mcp_host');
-
-// Initialize MCP Host
-const host = new AmphibianHost();
+const localBrain = new LocalBrain();
+const router = new MultiBrainRouter(localBrain);
+const memory = new ConversationMemory(20);
 
 // Start MCP Servers (Brain Modules)
 async function startBrains() {
     try {
         if (process.env.JULES_API_KEY) {
             await host.connectStdioServer('jules', 'node', ['./mcp_servers/jules_adapter.js']);
+            router.register('jules', true);
         }
         if (process.env.STITCH_API_KEY) {
             await host.connectStdioServer('stitch', 'node', ['./mcp_servers/stitch_adapter.js']);
+            router.register('stitch', true);
         }
         if (process.env.CONTEXT7_API_KEY) {
             await host.connectStdioServer('context7', 'node', ['./mcp_servers/context7_adapter.js']);
+            router.register('context7', true);
         }
         
         // Connect Local Android System
         const AndroidSystemServer = require('./android_mcp');
-        const androidServer = new AndroidSystemServer(global.androidBridgeCallback); // Bridge callback defined by JNI injection
-        // We'll treat local system as a direct client for simplicity here
+        // Bridge callback defined by JNI injection. global.androidBridgeCallback might be undefined in tests.
+        const androidServer = new AndroidSystemServer(global.androidBridgeCallback);
+        router.register('android', true);
         
         console.log('🧠 All Brain Modules Connected.');
     } catch (e) {
@@ -72,46 +77,60 @@ const agent = {
     execute: async (task, onLog) => {
         onLog('Analyzing task...', 'thought');
         
-        // 1. Get Tools
-        const tools = await host.getAllTools();
-        const toolNames = tools.map(t => t.name).join(', ');
-        onLog(`Available Tools: ${toolNames}`, 'info');
+        // 0. Update Memory
+        memory.add('user', task);
         
-        // 2. Intent Classification (Simple Heuristic for Speed)
-        // In a real version, we'd ask the Local LLM to pick the tool JSON.
+        // 1. Get Tools (Informational)
+        // const tools = await host.getAllTools();
+        // const toolNames = tools.map(t => t.name).join(', ');
+        // onLog(`Available Tools: ${toolNames}`, 'info');
+
+        // 2. Intent Classification (via Router)
+        const decision = await router.route(task, memory.getHistory());
+        onLog(`Routing to: ${decision.toolName} (${decision.reason})`, 'thought');
         
         try {
-            if (task.toLowerCase().includes('ui') || task.toLowerCase().includes('screen')) {
-                onLog('Routing to: Google Stitch (UI)', 'thought');
-                const result = await host.callTool('stitch', 'generate_ui', { prompt: task });
-                return result.content[0].text;
-            } 
-            
-            if (task.toLowerCase().includes('code') || task.toLowerCase().includes('fix')) {
-                onLog('Routing to: Google Jules (Coding)', 'thought');
-                const result = await host.callTool('jules', 'create_coding_session', { 
+            let resultText = "";
+
+            if (decision.toolName === 'jules') {
+                 const result = await host.callTool('jules', 'create_coding_session', {
                     prompt: task, 
                     source: 'current' 
                 });
-                return result.content[0].text;
-            }
+                resultText = result.content ? result.content[0].text : JSON.stringify(result);
 
-            if (task.toLowerCase().includes('sms') || task.toLowerCase().includes('text')) {
-                 // Simple regex extraction for demo
+            } else if (decision.toolName === 'stitch') {
+                const result = await host.callTool('stitch', 'generate_ui', { prompt: task });
+                resultText = result.content ? result.content[0].text : JSON.stringify(result);
+
+            } else if (decision.toolName === 'context7') {
+                 // Hypothetical call
+                 // const result = await host.callTool('context7', 'search', { query: task });
+                 // resultText = result.content[0].text;
+                 resultText = "Context7 search not fully implemented yet.";
+
+            } else if (decision.toolName === 'android') {
                  const match = task.match(/text (\d+) saying (.+)/);
                  if (match) {
-                     onLog(`Routing to: Android System (SMS) -> ${match[1]}`, 'tool');
-                     // This would call the Android MCP tool
-                     // return await host.callTool('android', 'send_sms', { phone: match[1], message: match[2] });
-                     return "SMS Sent (Simulated via Bridge)";
+                     // In real app, call android MCP
+                     // await host.callTool('android', 'send_sms', { phone: match[1], message: match[2] });
+                     resultText = `SMS Sent to ${match[1]}: "${match[2]}" (Simulated)`;
+                 } else {
+                     // Fallback to local brain if SMS intent is ambiguous
+                     const messages = memory.getHistory();
+                     const response = await localBrain.chat(messages);
+                     resultText = response.content;
                  }
+
+            } else {
+                // Default: Local LLM
+                const messages = memory.getHistory();
+                const response = await localBrain.chat(messages);
+                resultText = response.content;
             }
 
-            // Default: Ask the Local LLM (Gemma)
-            onLog('Routing to: Local TPU (Gemma 3)', 'thought');
-            // const result = await host.callTool('android', 'local_inference', { prompt: task });
-            // return result.content[0].text;
-            return `[Gemma 3 4B Response]: I can help with that! You asked about: "${task}"`;
+            memory.add('assistant', resultText);
+            return resultText;
             
         } catch (err) {
             onLog(`Error executing task: ${err.message}`, 'error');
