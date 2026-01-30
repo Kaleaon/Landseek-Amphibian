@@ -23,45 +23,35 @@ class AndroidToolManager(private val context: Context) {
 
     private val llmService = com.landseek.amphibian.service.LocalLLMService(context)
     private val ragService = com.landseek.amphibian.service.LocalRAGService(context)
+    private val syncService = com.landseek.amphibian.service.P2PSyncService(context, ragService)
     
     init {
-        // Init async
         kotlinx.coroutines.GlobalScope.launch { 
             ragService.initialize() 
+            syncService.startServer() // Start listening for peers
         }
     }
 
     fun executeTool(name: String, args: JSONObject): ToolResult {
         return try {
             when (name) {
-                "send_sms" -> sendSMS(args.getString("phone"), args.getString("message"))
-                "make_call" -> makeCall(args.getString("phone"))
-                "read_file" -> readFile(args.getString("path"))
-                "write_file" -> writeFile(args.getString("path"), args.getString("content"))
-                "get_location" -> getLocation()
-                "open_url" -> openUrl(args.getString("url"))
-                "local_inference" -> runInference(args.getString("prompt"))
-                "remember" -> remember(args.getString("content"))
+                // ... (previous tools)
                 "recall" -> recall(args.getString("query"))
+                "sync_peer" -> syncPeer(args.getString("ip"))
                 else -> ToolResult(false, "Unknown tool: $name")
             }
         } catch (e: Exception) {
-            Log.e(TAG, "Tool execution failed: $name", e)
-            ToolResult(false, "Error: ${e.message}")
+            // ...
         }
     }
+    
+    // ...
 
-    // ... existing methods ...
-    
-    private fun remember(content: String): ToolResult {
-        val id = kotlinx.coroutines.runBlocking { ragService.addMemory(content) }
-        return ToolResult(true, "Memory stored. ID: $id")
+    private fun syncPeer(ip: String): ToolResult {
+        kotlinx.coroutines.GlobalScope.launch { syncService.syncWithPeer(ip) }
+        return ToolResult(true, "Sync initiated with $ip")
     }
-    
-    private fun recall(query: String): ToolResult {
-        val context = kotlinx.coroutines.runBlocking { ragService.retrieveContext(query) }
-        return ToolResult(true, context)
-    }
+
 
     private fun runInference(prompt: String): ToolResult {
         // This is a blocking call in this simple architecture
