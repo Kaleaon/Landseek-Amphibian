@@ -55,7 +55,7 @@ Build a debug APK locally:
 
 ```bash
 cd android
-./gradlew assembleDebug
+gradle assembleDebug
 ```
 
 To generate the placeholder Node runtime assets:

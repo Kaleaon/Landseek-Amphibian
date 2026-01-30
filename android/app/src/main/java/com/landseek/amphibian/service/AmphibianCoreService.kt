@@ -13,7 +13,7 @@ import java.util.concurrent.TimeUnit
 /**
  * AmphibianCoreService
  *
- * This Foreground Service is responsible for:
+ * This background service is responsible for:
  * 1. Extracting the Node.js runtime from assets (if needed).
  * 2. Spawning the Node.js process ("The Brain").
  * 3. Maintaining the WebSocket bridge to the local Node server.

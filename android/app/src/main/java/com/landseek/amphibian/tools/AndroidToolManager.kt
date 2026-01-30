@@ -32,6 +32,11 @@ class AndroidToolManager(private val context: Context) {
         }
     }
 
+    /**
+     * Note: executeTool performs blocking calls (runBlocking) for memory + inference.
+     * Call from a background thread to avoid UI freezes.
+     * Ensure runtime permissions are granted before invoking sensitive tools.
+     */
     fun executeTool(name: String, args: JSONObject): ToolResult {
         return try {
             when (name) {
@@ -51,6 +56,7 @@ class AndroidToolManager(private val context: Context) {
             ToolResult(false, "Tool failed: ${e.message}")
         }
     }
+
     
     // ...
 
