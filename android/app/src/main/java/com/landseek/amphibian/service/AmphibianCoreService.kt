@@ -2,6 +2,7 @@ package com.landseek.amphibian.service
 
 import android.app.Service
 import android.content.Intent
+import android.os.Binder
 import android.os.IBinder
 import android.util.Log
 import kotlinx.coroutines.*
@@ -130,9 +131,12 @@ class AmphibianCoreService : Service() {
         webSocket?.close(1000, "Service Destroyed")
     }
 
-    override fun onBind(intent: Intent?): IBinder? {
-        // TODO: Return Binder for UI communication
-        return null
+    inner class LocalBinder : Binder() {
+        fun getService(): AmphibianCoreService = this@AmphibianCoreService
+    }
+
+    override fun onBind(intent: Intent?): IBinder {
+        return LocalBinder()
     }
     
     // Java 9+ ProcessHandle workaround for older Android APIs if needed
