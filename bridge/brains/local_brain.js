@@ -23,23 +23,17 @@ class LocalBrain {
 
     async chat(messages, options = {}) {
         try {
-            const response = await fetch(`${this.baseUrl}/api/chat`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    model: this.model,
-                    messages: messages,
-                    stream: false, // For now, non-streaming for simplicity in initial implementation
-                    ...options
-                })
-            });
-
-            if (!response.ok) {
-                throw new Error(`Ollama API error: ${response.statusText}`);
+            let fullContent = '';
+            for await (const chunk of this.chatStream(messages, options)) {
+                fullContent += chunk;
+                if (options.onChunk) {
+                    options.onChunk(chunk);
+                }
             }
-
-            const data = await response.json();
-            return data.message; // { role: 'assistant', content: '...' }
+            return {
+                role: 'assistant',
+                content: fullContent
+            };
         } catch (error) {
             console.error('Local Brain Chat Error:', error);
             // Fallback response

@@ -23,6 +23,7 @@ const EVENTS = {
     // Outbound (Agent -> UI)
     STATUS_UPDATE: 'STATUS_UPDATE',
     LOG: 'LOG',
+    STREAM_CHUNK: 'STREAM_CHUNK',
     TOOL_USE: 'TOOL_USE',
     RESULT: 'RESULT',
     ERROR: 'ERROR'
@@ -74,7 +75,7 @@ async function startBrains() {
 startBrains();
 
 const agent = {
-    execute: async (task, onLog) => {
+    execute: async (task, onLog, onToken) => {
         onLog('Analyzing task...', 'thought');
         
         // 0. Update Memory
@@ -118,14 +119,14 @@ const agent = {
                  } else {
                      // Fallback to local brain if SMS intent is ambiguous
                      const messages = memory.getHistory();
-                     const response = await localBrain.chat(messages);
+                     const response = await localBrain.chat(messages, { onChunk: onToken });
                      resultText = response.content;
                  }
 
             } else {
                 // Default: Local LLM
                 const messages = memory.getHistory();
-                const response = await localBrain.chat(messages);
+                const response = await localBrain.chat(messages, { onChunk: onToken });
                 resultText = response.content;
             }
 
@@ -189,9 +190,15 @@ async function handleMessage(data) {
             send(EVENTS.STATUS_UPDATE, { status: 'WORKING', task: data.payload.task });
             
             try {
-                const result = await agent.execute(data.payload.task, (text, type) => {
-                    send(EVENTS.LOG, { text, type });
-                });
+                const result = await agent.execute(
+                    data.payload.task,
+                    (text, type) => {
+                        send(EVENTS.LOG, { text, type });
+                    },
+                    (chunk) => {
+                        send(EVENTS.STREAM_CHUNK, { chunk });
+                    }
+                );
                 send(EVENTS.RESULT, { result });
             } catch (err) {
                 send(EVENTS.ERROR, { message: err.message });
