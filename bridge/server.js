@@ -46,18 +46,28 @@ const memory = new ConversationMemory(20);
 // Start MCP Servers (Brain Modules)
 async function startBrains() {
     try {
+        const connections = [];
+
         if (process.env.JULES_API_KEY) {
-            await host.connectStdioServer('jules', 'node', ['./mcp_servers/jules_adapter.js']);
-            router.register('jules', true);
+            connections.push(
+                host.connectStdioServer('jules', 'node', ['./mcp_servers/jules_adapter.js'])
+                    .then(() => router.register('jules', true))
+            );
         }
         if (process.env.STITCH_API_KEY) {
-            await host.connectStdioServer('stitch', 'node', ['./mcp_servers/stitch_adapter.js']);
-            router.register('stitch', true);
+            connections.push(
+                host.connectStdioServer('stitch', 'node', ['./mcp_servers/stitch_adapter.js'])
+                    .then(() => router.register('stitch', true))
+            );
         }
         if (process.env.CONTEXT7_API_KEY) {
-            await host.connectStdioServer('context7', 'node', ['./mcp_servers/context7_adapter.js']);
-            router.register('context7', true);
+            connections.push(
+                host.connectStdioServer('context7', 'node', ['./mcp_servers/context7_adapter.js'])
+                    .then(() => router.register('context7', true))
+            );
         }
+
+        await Promise.all(connections);
         
         // Connect Local Android System
         const AndroidSystemServer = require('./android_mcp');
