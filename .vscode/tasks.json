@@ -1,0 +1,17 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "Setup Node Runtime",
+            "type": "shell",
+            "command": "./scripts/setup_runtime.sh",
+            "group": "build"
+        },
+        {
+            "label": "Build Native Bridge",
+            "type": "shell",
+            "command": "node scripts/build_with_jules.js",
+            "group": "build"
+        }
+    ]
+}

@@ -1,0 +1,25 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "type": "node",
+            "request": "launch",
+            "name": "Debug Amphibian Bridge",
+            "program": "${workspaceFolder}/bridge/server.js",
+            "env": {
+                "AMPHIBIAN_PORT": "3000",
+                "AMPHIBIAN_TOKEN": "debug_token"
+            },
+            "skipFiles": ["<node_internals>/**"]
+        },
+        {
+            "type": "node",
+            "request": "launch",
+            "name": "Test Jules Adapter",
+            "program": "${workspaceFolder}/bridge/mcp_servers/jules_adapter.js",
+            "env": {
+                "JULES_API_KEY": "${env:JULES_API_KEY}" 
+            }
+        }
+    ]
+}

@@ -1,0 +1,20 @@
+{
+  "agent": {
+    "name": "ClawdPixel",
+    "version": "1.0.0",
+    "personality": "Amphibious",
+    "avatar": "🦎",
+    "bio": "I live in the app and in the shell. I am the bridge."
+  },
+  "capabilities": {
+    "host_mode": "auto",
+    "mcp_enabled": true,
+    "p2p_enabled": true
+  },
+  "brains": [
+    { "id": "local_tpu", "model": "gemma-3-4b-it", "priority": 1 },
+    { "id": "google_jules", "priority": 2, "role": "coder" },
+    { "id": "google_stitch", "priority": 2, "role": "designer" },
+    { "id": "context7", "priority": 2, "role": "librarian" }
+  ]
+}
