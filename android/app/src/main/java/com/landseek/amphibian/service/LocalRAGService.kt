@@ -90,6 +90,58 @@ class LocalRAGService(private val context: Context) {
         saveMindMap()
     }
 
+    // --- Sync Methods ---
+
+    suspend fun getLatestTimestamp(): Long {
+        return withContext(Dispatchers.Default) {
+            memories.maxOfOrNull { it.timestamp } ?: 0L
+        }
+    }
+
+    suspend fun getMemoriesSince(timestamp: Long): List<MemoryChunk> {
+        return withContext(Dispatchers.Default) {
+            memories.filter { it.timestamp > timestamp }
+        }
+    }
+
+    suspend fun mergeMemories(newMemories: List<MemoryChunk>) {
+        withContext(Dispatchers.Default) {
+            var addedCount = 0
+            val existingIds = memories.map { it.id }.toSet()
+
+            for (mem in newMemories) {
+                if (mem.id !in existingIds) {
+                    memories.add(mem)
+                    addedCount++
+                }
+            }
+            if (addedCount > 0) {
+                saveMemories()
+                Log.d(TAG, "Merged $addedCount new memories.")
+            }
+        }
+    }
+
+    fun memoryToJson(mem: MemoryChunk): JSONObject {
+        val json = JSONObject()
+        json.put("id", mem.id)
+        json.put("text", mem.text)
+        json.put("timestamp", mem.timestamp)
+        val embeddingArray = JSONArray()
+        mem.embedding.forEach { embeddingArray.put(it.toDouble()) }
+        json.put("embedding", embeddingArray)
+        return json
+    }
+
+    fun jsonToMemory(json: JSONObject): MemoryChunk {
+        val id = json.getString("id")
+        val text = json.getString("text")
+        val timestamp = json.getLong("timestamp")
+        val embArray = json.getJSONArray("embedding")
+        val embedding = FloatArray(embArray.length()) { i -> embArray.getDouble(i).toFloat() }
+        return MemoryChunk(id, text, embedding, timestamp)
+    }
+
     // --- Helpers ---
 
     private fun generateEmbedding(text: String): FloatArray {
