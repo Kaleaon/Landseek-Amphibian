@@ -37,11 +37,6 @@ const AmphibianHost = require('./mcp_host');
 // Initialize MCP Host
 const host = new AmphibianHost();
 
-const AmphibianHost = require('./mcp_host');
-
-// Initialize MCP Host
-const host = new AmphibianHost();
-
 // Start MCP Servers (Brain Modules)
 async function startBrains() {
     try {

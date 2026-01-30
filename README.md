@@ -49,6 +49,23 @@ Landseek-Amphibian automatically detects device capabilities to choose the best 
 - [ ] **Phase 4: The Installer** (App extracts and bootstraps the runtime on first launch)
 - [ ] **Phase 5: Release** (First APK build)
 
+## Debug Build
+
+Build a debug APK locally:
+
+```bash
+cd android
+./gradlew assembleDebug
+```
+
+To generate the placeholder Node runtime assets:
+
+```bash
+bash scripts/setup_runtime.sh
+```
+
+The GitHub Actions workflow **Build Debug APK** runs the same steps and uploads the debug APK artifact.
+
 ## License
 
 MIT

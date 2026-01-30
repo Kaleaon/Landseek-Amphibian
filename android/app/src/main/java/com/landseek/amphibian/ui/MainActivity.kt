@@ -23,7 +23,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         
         // Auto-start the Brain Service
-        startForegroundService(Intent(this, AmphibianCoreService::class.java))
+        startService(Intent(this, AmphibianCoreService::class.java))
 
         setContent {
             MaterialTheme(colorScheme = darkColorScheme()) {

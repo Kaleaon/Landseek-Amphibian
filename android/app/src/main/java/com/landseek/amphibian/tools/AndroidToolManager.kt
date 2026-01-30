@@ -5,7 +5,7 @@ import android.content.Intent
 import android.net.Uri
 import android.telephony.SmsManager
 import android.util.Log
-import androidx.core.content.ContextCompat
+import kotlinx.coroutines.runBlocking
 import org.json.JSONObject
 import java.io.File
 
@@ -35,13 +35,20 @@ class AndroidToolManager(private val context: Context) {
     fun executeTool(name: String, args: JSONObject): ToolResult {
         return try {
             when (name) {
-                // ... (previous tools)
+                "send_sms" -> sendSms(args.getString("phone"), args.getString("message"))
+                "make_call" -> makeCall(args.getString("phone"))
+                "read_file" -> readFile(args.getString("path"))
+                "write_file" -> writeFile(args.getString("path"), args.getString("content"))
+                "get_location" -> getLocation()
+                "open_url" -> openUrl(args.getString("url"))
+                "remember" -> remember(args.getString("content"))
                 "recall" -> recall(args.getString("query"))
                 "sync_peer" -> syncPeer(args.getString("ip"))
+                "run_inference" -> runInference(args.getString("prompt"))
                 else -> ToolResult(false, "Unknown tool: $name")
             }
         } catch (e: Exception) {
-            // ...
+            ToolResult(false, "Tool failed: ${e.message}")
         }
     }
     
@@ -52,6 +59,15 @@ class AndroidToolManager(private val context: Context) {
         return ToolResult(true, "Sync initiated with $ip")
     }
 
+    private fun remember(content: String): ToolResult {
+        val id = runBlocking { ragService.addMemory(content) }
+        return ToolResult(true, "Saved memory $id")
+    }
+
+    private fun recall(query: String): ToolResult {
+        val context = runBlocking { ragService.retrieveContext(query) }
+        return ToolResult(true, context)
+    }
 
     private fun runInference(prompt: String): ToolResult {
         // This is a blocking call in this simple architecture
@@ -61,8 +77,8 @@ class AndroidToolManager(private val context: Context) {
         }
         return ToolResult(true, response)
     }
-}
-        // Permission check handled by caller/activity before invoking this
+ 
+    private fun sendSms(phone: String, message: String): ToolResult {
         return try {
             val smsManager = context.getSystemService(SmsManager::class.java)
             smsManager.sendTextMessage(phone, null, message, null, null)
