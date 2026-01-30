@@ -12,8 +12,6 @@ This document defines the technical architecture for embedding the OpenClaw agen
 | **Bridge** | JNI / WebSocket (Localhost) | Communication channel between Android JVM and Node.js. |
 | **Protocol** | **MCP (Model Context Protocol)** | Standard for connecting the Agent to Tools (Jules, Context7, Stitch). |
 | **Runtime** | Node.js (v22+ arm64) | The execution environment for OpenClaw. |
-| **Agent** | OpenClaw Core | The logic brain (tools, planning, execution). |
-| **LLM** | Ollama (Android Native) | The inference engine (Gemma 3 4B on TPU). |
 
 ## 2. Component Diagram
 
@@ -28,9 +26,9 @@ graph TD
             Service -- Spawns --> NodeBin[Node.js Binary]
             NodeBin --> MCPHost[MCP Host / Bridge]
             
-            MCPHost -- MCP StdIO --> Jules[Google Jules (MCP)]
-            MCPHost -- MCP StdIO --> Context7[Context7 (MCP)]
-            MCPHost -- MCP StdIO --> Stitch[Google Stitch (MCP)]
+            MCPHost -- MCP StdIO --> Jules[Google Jules (Coder)]
+            MCPHost -- MCP StdIO --> Context7[Context7 (Memory)]
+            MCPHost -- MCP StdIO --> Stitch[Google Stitch (UI Designer)]
             MCPHost -- Internal --> LocalTools[Android Local Tools]
         end
         
@@ -38,6 +36,10 @@ graph TD
             MCPHost -- HTTP --> Ollama[Ollama Server]
         end
     end
+    
+    Jules -- Writes --> BackendLogic[Logic Code]
+    Stitch -- Generates --> FrontendUI[Compose UI Code]
+    LocalTools -- Compiles --> APK[App Build]
 ```
 
 ## 3. Implementation Details
