@@ -17,25 +17,23 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import com.landseek.amphibian.service.AmphibianCoreService
 import android.content.Intent
+import android.content.ServiceConnection
 import android.content.ComponentName
 import android.content.Context
-import android.content.ServiceConnection
 import android.os.IBinder
 
 class MainActivity : ComponentActivity() {
 
-    private var amphibianService: AmphibianCoreService? = null
-    private var isBound = false
+    private var coreService by mutableStateOf<AmphibianCoreService?>(null)
 
     private val connection = object : ServiceConnection {
         override fun onServiceConnected(className: ComponentName, service: IBinder) {
             val binder = service as AmphibianCoreService.LocalBinder
-            amphibianService = binder.getService()
-            isBound = true
+            coreService = binder.getService()
         }
 
         override fun onServiceDisconnected(arg0: ComponentName) {
-            isBound = false
+            coreService = null
         }
     }
 
@@ -43,41 +41,38 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         
         // Auto-start the Brain Service
-        startForegroundService(Intent(this, AmphibianCoreService::class.java))
+        val intent = Intent(this, AmphibianCoreService::class.java)
+        startForegroundService(intent)
+        bindService(intent, connection, Context.BIND_AUTO_CREATE)
 
         setContent {
             MaterialTheme(colorScheme = darkColorScheme()) {
-                AmphibianApp(onSend = { message ->
-                    if (isBound) {
-                        amphibianService?.executeTask(message)
-                    }
-                })
+                AmphibianApp(coreService)
             }
         }
     }
 
-    override fun onStart() {
-        super.onStart()
-        Intent(this, AmphibianCoreService::class.java).also { intent ->
-            bindService(intent, connection, Context.BIND_AUTO_CREATE)
-        }
-    }
-
-    override fun onStop() {
-        super.onStop()
+    override fun onDestroy() {
+        super.onDestroy()
         unbindService(connection)
-        isBound = false
     }
 }
 
 @Composable
-fun AmphibianApp(onSend: (String) -> Unit) {
+fun AmphibianApp(service: AmphibianCoreService?) {
     var input by remember { mutableStateOf("") }
     val messages = remember { mutableStateListOf<Message>() }
 
     // Mock initial message
     LaunchedEffect(Unit) {
         messages.add(Message("Amphibian Agent", "Core systems online. Node.js bridge active. 🐸", true))
+    }
+
+    // Listen to Agent messages
+    LaunchedEffect(service) {
+        service?.messageFlow?.collect { msg ->
+            messages.add(Message("Amphibian Agent", msg, true))
+        }
     }
 
     Column(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
@@ -113,7 +108,7 @@ fun AmphibianApp(onSend: (String) -> Unit) {
                 keyboardActions = KeyboardActions(onSend = {
                     if (input.isNotBlank()) {
                         messages.add(Message("You", input, false))
-                        onSend(input)
+                        service?.executeTask(input)
                         input = ""
                     }
                 })
@@ -121,7 +116,7 @@ fun AmphibianApp(onSend: (String) -> Unit) {
             Button(onClick = {
                 if (input.isNotBlank()) {
                     messages.add(Message("You", input, false))
-                    onSend(input)
+                    service?.executeTask(input)
                     input = ""
                 }
             }) {
