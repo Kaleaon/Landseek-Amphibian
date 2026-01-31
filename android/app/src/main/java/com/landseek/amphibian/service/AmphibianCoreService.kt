@@ -2,12 +2,17 @@ package com.landseek.amphibian.service
 
 import android.app.Service
 import android.content.Intent
+import android.os.Binder
 import android.os.IBinder
 import android.util.Log
 import kotlinx.coroutines.*
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import okhttp3.*
 import org.json.JSONObject
 import java.io.File
+import java.io.FileOutputStream
 import java.util.concurrent.TimeUnit
 
 /**
@@ -25,6 +30,14 @@ class AmphibianCoreService : Service() {
     private var nodeProcess: Process? = null
     private var webSocket: WebSocket? = null
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+
+    // Event Stream
+    private val _messageFlow = MutableSharedFlow<String>(replay = 0)
+    val messageFlow: SharedFlow<String> = _messageFlow.asSharedFlow()
+
+    inner class LocalBinder : Binder() {
+        fun getService(): AmphibianCoreService = this@AmphibianCoreService
+    }
     
     // Config
     private val PORT = 3000
@@ -51,8 +64,20 @@ class AmphibianCoreService : Service() {
         // Simulating extraction logic
         if (!nodeBin.exists()) {
             Log.d(TAG, "Extracting Node binary from assets...")
-            // TODO: AssetManager.open("node-bin/node").copyTo(nodeBin)
-            // nodeBin.setExecutable(true)
+            try {
+                assets.open("node-bin/node").use { inputStream ->
+                    FileOutputStream(nodeBin).use { outputStream ->
+                        inputStream.copyTo(outputStream)
+                    }
+                }
+                if (nodeBin.setExecutable(true)) {
+                    Log.d(TAG, "Node binary extracted and made executable.")
+                } else {
+                    Log.w(TAG, "Failed to make Node binary executable.")
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to extract Node binary", e)
+            }
         }
     }
 
@@ -103,7 +128,9 @@ class AmphibianCoreService : Service() {
 
             override fun onMessage(webSocket: WebSocket, text: String) {
                 Log.d(TAG, "Agent Says: $text")
-                // TODO: Broadcast this to the UI via LiveData/Flow
+                scope.launch {
+                    _messageFlow.emit(text)
+                }
             }
 
             override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
@@ -131,8 +158,7 @@ class AmphibianCoreService : Service() {
     }
 
     override fun onBind(intent: Intent?): IBinder? {
-        // TODO: Return Binder for UI communication
-        return null
+        return LocalBinder()
     }
     
     // Java 9+ ProcessHandle workaround for older Android APIs if needed

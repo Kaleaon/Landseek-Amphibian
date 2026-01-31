@@ -110,7 +110,7 @@ fun GeneratedScreen() {
     Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
         Text(text = "${prompt}", style = MaterialTheme.typography.headlineMedium)
         Spacer(modifier = Modifier.height(16.dp))
-        Button(onClick = { /* TODO */ }) {
+        Button(onClick = { println("Action clicked for ${prompt}") }) {
             Text("Action")
         }
     }
