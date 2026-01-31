@@ -12,6 +12,7 @@ import kotlinx.coroutines.flow.asSharedFlow
 import okhttp3.*
 import org.json.JSONObject
 import java.io.File
+import java.io.FileOutputStream
 import java.util.concurrent.TimeUnit
 
 /**
@@ -63,8 +64,20 @@ class AmphibianCoreService : Service() {
         // Simulating extraction logic
         if (!nodeBin.exists()) {
             Log.d(TAG, "Extracting Node binary from assets...")
-            // TODO: AssetManager.open("node-bin/node").copyTo(nodeBin)
-            // nodeBin.setExecutable(true)
+            try {
+                assets.open("node-bin/node").use { inputStream ->
+                    FileOutputStream(nodeBin).use { outputStream ->
+                        inputStream.copyTo(outputStream)
+                    }
+                }
+                if (nodeBin.setExecutable(true)) {
+                    Log.d(TAG, "Node binary extracted and made executable.")
+                } else {
+                    Log.w(TAG, "Failed to make Node binary executable.")
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to extract Node binary", e)
+            }
         }
     }
 
