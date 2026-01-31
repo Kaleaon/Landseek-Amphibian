@@ -46,26 +46,18 @@ const memory = new ConversationMemory(20);
 // Start MCP Servers (Brain Modules)
 async function startBrains() {
     try {
-        const connections = [];
+        const brainConfigs = [
+            { name: 'jules', apiKey: process.env.JULES_API_KEY, adapter: './mcp_servers/jules_adapter.js' },
+            { name: 'stitch', apiKey: process.env.STITCH_API_KEY, adapter: './mcp_servers/stitch_adapter.js' },
+            { name: 'context7', apiKey: process.env.CONTEXT7_API_KEY, adapter: './mcp_servers/context7_adapter.js' }
+        ];
 
-        if (process.env.JULES_API_KEY) {
-            connections.push(
-                host.connectStdioServer('jules', 'node', ['./mcp_servers/jules_adapter.js'])
-                    .then(() => router.register('jules', true))
+        const connections = brainConfigs
+            .filter(config => config.apiKey)
+            .map(config =>
+                host.connectStdioServer(config.name, 'node', [config.adapter])
+                    .then(() => router.register(config.name, true))
             );
-        }
-        if (process.env.STITCH_API_KEY) {
-            connections.push(
-                host.connectStdioServer('stitch', 'node', ['./mcp_servers/stitch_adapter.js'])
-                    .then(() => router.register('stitch', true))
-            );
-        }
-        if (process.env.CONTEXT7_API_KEY) {
-            connections.push(
-                host.connectStdioServer('context7', 'node', ['./mcp_servers/context7_adapter.js'])
-                    .then(() => router.register('context7', true))
-            );
-        }
 
         await Promise.all(connections);
         
