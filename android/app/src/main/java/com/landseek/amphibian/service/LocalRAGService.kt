@@ -90,6 +90,58 @@ class LocalRAGService(private val context: Context) {
         saveMindMap()
     }
 
+    // --- Sync Methods ---
+
+    suspend fun getLatestTimestamp(): Long {
+        return withContext(Dispatchers.Default) {
+            memories.maxOfOrNull { it.timestamp } ?: 0L
+        }
+    }
+
+    suspend fun getMemoriesSince(timestamp: Long): List<MemoryChunk> {
+        return withContext(Dispatchers.Default) {
+            memories.filter { it.timestamp > timestamp }
+        }
+    }
+
+    suspend fun mergeMemories(newMemories: List<MemoryChunk>) {
+        withContext(Dispatchers.Default) {
+            var addedCount = 0
+            val existingIds = memories.map { it.id }.toSet()
+
+            for (mem in newMemories) {
+                if (mem.id !in existingIds) {
+                    memories.add(mem)
+                    addedCount++
+                }
+            }
+            if (addedCount > 0) {
+                saveMemories()
+                Log.d(TAG, "Merged $addedCount new memories.")
+            }
+        }
+    }
+
+    fun memoryToJson(mem: MemoryChunk): JSONObject {
+        val json = JSONObject()
+        json.put("id", mem.id)
+        json.put("text", mem.text)
+        json.put("timestamp", mem.timestamp)
+        val embeddingArray = JSONArray()
+        mem.embedding.forEach { embeddingArray.put(it.toDouble()) }
+        json.put("embedding", embeddingArray)
+        return json
+    }
+
+    fun jsonToMemory(json: JSONObject): MemoryChunk {
+        val id = json.getString("id")
+        val text = json.getString("text")
+        val timestamp = json.getLong("timestamp")
+        val embArray = json.getJSONArray("embedding")
+        val embedding = FloatArray(embArray.length()) { i -> embArray.getDouble(i).toFloat() }
+        return MemoryChunk(id, text, embedding, timestamp)
+    }
+
     // --- Helpers ---
 
     private fun generateEmbedding(text: String): FloatArray {
@@ -118,19 +170,76 @@ class LocalRAGService(private val context: Context) {
     }
 
     private fun saveMemories() {
-        // Serialize to JSON and write to disk
-        // (Implementation omitted for brevity)
+        try {
+            val file = File(context.filesDir, MEMORY_FILE)
+            val jsonArray = JSONArray()
+            memories.forEach { mem -> jsonArray.put(memoryToJson(mem)) }
+            file.writeText(jsonArray.toString())
+            Log.d(TAG, "Saved ${memories.size} memories to disk")
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to save memories", e)
+        }
     }
     
     private fun loadMemories() {
-        // Load from JSON
+        try {
+            val file = File(context.filesDir, MEMORY_FILE)
+            if (!file.exists()) return
+            
+            val content = file.readText()
+            val jsonArray = JSONArray(content)
+            
+            for (i in 0 until jsonArray.length()) {
+                val json = jsonArray.getJSONObject(i)
+                memories.add(jsonToMemory(json))
+            }
+            Log.d(TAG, "Loaded ${memories.size} memories from disk")
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to load memories", e)
+        }
     }
     
     private fun saveMindMap() {
-        // Save Graph
+        try {
+            val file = File(context.filesDir, MIND_MAP_FILE)
+            val jsonObject = JSONObject()
+            mindMap.forEach { (id, node) ->
+                val nodeJson = JSONObject()
+                nodeJson.put("id", node.id)
+                val connections = JSONArray()
+                node.connections.forEach { connections.put(it) }
+                nodeJson.put("connections", connections)
+                jsonObject.put(id, nodeJson)
+            }
+            file.writeText(jsonObject.toString())
+            Log.d(TAG, "Saved mind map with ${mindMap.size} nodes")
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to save mind map", e)
+        }
     }
     
     private fun loadMindMap() {
-        // Load Graph
+        try {
+            val file = File(context.filesDir, MIND_MAP_FILE)
+            if (!file.exists()) return
+            
+            val content = file.readText()
+            val jsonObject = JSONObject(content)
+            
+            val keys = jsonObject.keys()
+            while (keys.hasNext()) {
+                val id = keys.next()
+                val nodeJson = jsonObject.getJSONObject(id)
+                val connections = mutableListOf<String>()
+                val connArray = nodeJson.getJSONArray("connections")
+                for (i in 0 until connArray.length()) {
+                    connections.add(connArray.getString(i))
+                }
+                mindMap[id] = GraphNode(nodeJson.getString("id"), connections)
+            }
+            Log.d(TAG, "Loaded mind map with ${mindMap.size} nodes")
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to load mind map", e)
+        }
     }
 }
