@@ -8,6 +8,25 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 TARGET_DIR="$PROJECT_ROOT/android/app/src/main/assets/node-bin"
 
+# Function to create a placeholder node binary (must be defined before use)
+create_placeholder() {
+    cat > "$TARGET_DIR/node" << 'EOF'
+#!/system/bin/sh
+# Placeholder Node.js binary
+# Replace this with a real aarch64-linux-android Node.js binary
+# 
+# Options:
+# 1. Download from nodejs-mobile project
+# 2. Build from source using Android NDK
+# 3. Use termux's Node.js binary
+
+echo "ERROR: This is a placeholder. Please install a real Node.js binary."
+echo "See scripts/setup_runtime.sh for instructions."
+exit 1
+EOF
+    chmod +x "$TARGET_DIR/node"
+}
+
 echo "🐸 Landseek-Amphibian Node.js Runtime Setup"
 echo "============================================"
 echo "Node.js Version: $NODE_VERSION"
@@ -37,16 +56,20 @@ TEMP_DIR=$(mktemp -d)
 # Try to download, fall back to placeholder if network unavailable
 if curl -L --connect-timeout 10 -o "$TEMP_DIR/node.tar.gz" "$DOWNLOAD_URL" 2>/dev/null; then
     echo "✅ Download complete. Extracting..."
-    tar -xzf "$TEMP_DIR/node.tar.gz" -C "$TEMP_DIR"
-    
-    # Find and copy the node binary
-    NODE_BIN=$(find "$TEMP_DIR" -name "node" -type f | head -1)
-    if [ -n "$NODE_BIN" ]; then
-        cp "$NODE_BIN" "$TARGET_DIR/node"
-        chmod +x "$TARGET_DIR/node"
-        echo "✅ Node.js binary installed at $TARGET_DIR/node"
+    if tar -xzf "$TEMP_DIR/node.tar.gz" -C "$TEMP_DIR" 2>/dev/null; then
+        # Find and copy the node binary
+        NODE_BIN=$(find "$TEMP_DIR" -name "node" -type f | head -1)
+        if [ -n "$NODE_BIN" ]; then
+            cp "$NODE_BIN" "$TARGET_DIR/node"
+            chmod +x "$TARGET_DIR/node"
+            echo "✅ Node.js binary installed at $TARGET_DIR/node"
+        else
+            echo "⚠️  Could not find node binary in archive"
+            create_placeholder
+        fi
     else
-        echo "⚠️  Could not find node binary in archive"
+        echo "⚠️  Failed to extract archive (possibly invalid or corrupted)"
+        echo "   Creating placeholder for development..."
         create_placeholder
     fi
     
@@ -56,24 +79,6 @@ else
     echo "   Creating placeholder for development..."
     create_placeholder
 fi
-
-create_placeholder() {
-    cat > "$TARGET_DIR/node" << 'EOF'
-#!/system/bin/sh
-# Placeholder Node.js binary
-# Replace this with a real aarch64-linux-android Node.js binary
-# 
-# Options:
-# 1. Download from nodejs-mobile project
-# 2. Build from source using Android NDK
-# 3. Use termux's Node.js binary
-
-echo "ERROR: This is a placeholder. Please install a real Node.js binary."
-echo "See scripts/setup_runtime.sh for instructions."
-exit 1
-EOF
-    chmod +x "$TARGET_DIR/node"
-}
 
 # Verify the binary
 echo ""
