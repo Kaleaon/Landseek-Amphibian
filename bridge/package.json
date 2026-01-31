@@ -1,14 +1,14 @@
 {
-  "name": "bridge",
+  "name": "amphibian-bridge",
   "version": "1.0.0",
-  "description": "",
-  "main": "android_mcp.js",
+  "description": "Amphibian Bridge for Landseek",
+  "main": "server.js",
   "directories": {
     "test": "tests"
   },
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
-    "start": "node server.js"
+    "start": "node server.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],
   "author": "",

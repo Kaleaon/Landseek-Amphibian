@@ -29,7 +29,6 @@ class TPUBrain {
             // Call the Android JNI Bridge
             // The signature is: inference(prompt, jsCallback)
             // jsCallback will be called multiple times: (error, chunk, done)
-            // Note: The JNI layer must handle invoking this JS callback from the native thread.
             this.bridgeCallback.inference(prompt, (error, chunk, done) => {
                 if (error) {
                     reject(new Error(error));
@@ -46,6 +45,22 @@ class TPUBrain {
                 }
             });
         });
+    }
+
+    /**
+     * Chat interface for Router/Agent compatibility.
+     * Converts a list of messages to a single prompt string.
+     * @param {Array} messages - [{role: 'user', content: '...'}, ...]
+     * @returns {Promise<Object>} { content: "..." }
+     */
+    async chat(messages) {
+        // Simple prompt construction.
+        // Ideally, we'd use a template appropriate for the model (e.g., ChatML or Gemma formatting).
+        // For now, we'll just join them.
+        const prompt = messages.map(m => `${m.role}: ${m.content}`).join('\n') + "\nassistant:";
+
+        const content = await this.generate(prompt);
+        return { content };
     }
 }
 

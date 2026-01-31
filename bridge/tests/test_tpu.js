@@ -34,22 +34,35 @@ async function runTest() {
     assert.strictEqual(result, "I can help with that!");
     console.log("✅ TPUBrain passed.");
 
-    // 2. Test Router defaulting to TPU
-    console.log("\n - Testing Router defaulting...");
-    const router = new MultiBrain({});
-    router.register('tpu', tpuBrain);
+    // 1b. Test TPUBrain.chat (New method)
+    console.log(" - Testing TPUBrain.chat...");
+    const chatResult = await tpuBrain.chat([{ role: 'user', content: 'Hello' }]);
+    assert.strictEqual(chatResult.content, "I can help with that!");
+    console.log("✅ TPUBrain.chat passed.");
 
-    const brain = await router.route("Hello world");
-    assert.strictEqual(brain, tpuBrain);
-    console.log("✅ Router defaulted to TPU.");
+
+    // 2. Test Router defaulting to TPU (Local)
+    console.log("\n - Testing Router defaulting...");
+    const router = new MultiBrain(tpuBrain); // Pass tpuBrain as localBrain
+    router.register('local', true); // Register local
+
+    // We expect it to try LLM classification (using tpuBrain) or fallback to local
+    // Since mockBridge returns "I can help with that!", it won't be valid JSON for classification.
+    // So it should fallback to keywords, and "Hello world" -> fallback 'local'.
+
+    const decision = await router.route("Hello world");
+    // decision should be { toolName: 'local', confidence: 1.0, reason: 'keyword/fallback' }
+
+    console.log("Decision:", decision);
+    assert.strictEqual(decision.toolName, 'local');
+    console.log("✅ Router defaulted to local.");
 
     // 3. Test Router specific routing
     console.log("\n - Testing Router specific routing...");
-    const mockJules = { name: 'jules' };
-    router.register('jules', mockJules);
+    router.register('jules', true);
 
-    const codingBrain = await router.route("Fix this code bug");
-    assert.strictEqual(codingBrain, mockJules);
+    const codingDecision = await router.route("Fix this code bug");
+    assert.strictEqual(codingDecision.toolName, 'jules');
     console.log("✅ Router routed to Jules.");
 
     // 4. Test AndroidInferenceServer (MCP Tool)

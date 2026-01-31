@@ -35,14 +35,19 @@ let agentBusy = false;
 const AmphibianHost = require('./mcp_host');
 const MultiBrain = require('./brains/router');
 const TPUBrain = require('./brains/tpu_brain');
+const ConversationMemory = require('./brains/memory');
 const AndroidInferenceServer = require('./mcp_servers/android_inference');
+const AndroidSystemServer = require('./android_mcp');
 
 // Initialize MCP Host
 const host = new AmphibianHost();
 
-// Initialize Router & Brains
-const router = new MultiBrain({});
+// Initialize Memory
+const memory = new ConversationMemory(20);
+
+// Initialize Brains
 let tpuBrain;
+const router = new MultiBrain(null); // Will set localBrain later
 
 // Start MCP Servers (Brain Modules)
 async function startBrains() {
@@ -50,30 +55,35 @@ async function startBrains() {
         // 1. Local TPU (Default)
         // Wraps the Android native bridge callback
         tpuBrain = new TPUBrain(global.androidBridgeCallback);
-        router.register('tpu', tpuBrain);
+        // Update router with the local brain instance
+        router.localBrain = tpuBrain;
+        router.register('tpu', true);
+        router.register('local', true); // Alias
         console.log('🧠 Registered Local TPU Brain');
 
         // 2. Android Local Inference MCP (Expose TPU as tools)
         // This makes the TPU available as a tool server if we need to connect it to other agents
         const inferenceServer = new AndroidInferenceServer(tpuBrain);
+        // Note: To be fully usable by 'host', we'd need to bridge this server to a client or transport.
+        // For now, it exists as requested.
 
         // 3. Specialized Brains (Optional / Cloud)
         if (process.env.JULES_API_KEY) {
-            const client = await host.connectStdioServer('jules', 'node', ['./mcp_servers/jules_adapter.js']);
-            router.register('jules', client);
+            await host.connectStdioServer('jules', 'node', ['./mcp_servers/jules_adapter.js']);
+            router.register('jules', true);
         }
         if (process.env.STITCH_API_KEY) {
-            const client = await host.connectStdioServer('stitch', 'node', ['./mcp_servers/stitch_adapter.js']);
-            router.register('stitch', client);
+            await host.connectStdioServer('stitch', 'node', ['./mcp_servers/stitch_adapter.js']);
+            router.register('stitch', true);
         }
         if (process.env.CONTEXT7_API_KEY) {
-            const client = await host.connectStdioServer('context7', 'node', ['./mcp_servers/context7_adapter.js']);
-            router.register('context7', client);
+            await host.connectStdioServer('context7', 'node', ['./mcp_servers/context7_adapter.js']);
+            router.register('context7', true);
         }
         
         // Connect Local Android System
-        const AndroidSystemServer = require('./android_mcp');
         const androidServer = new AndroidSystemServer(global.androidBridgeCallback);
+        router.register('android', true);
         
         console.log('🧠 All Brain Modules Connected.');
     } catch (e) {
@@ -87,67 +97,59 @@ const agent = {
     execute: async (task, onLog) => {
         onLog('Analyzing task...', 'thought');
         
-        // 1. Get Tools (Optional - mainly for introspection)
+        // 0. Update Memory
+        memory.add('user', task);
+
+        // 1. Get Tools (Informational)
         // const tools = await host.getAllTools();
         
-        // 2. Route Task
-        const brain = await router.route(task);
+        // 2. Intent Classification (via Router)
+        const decision = await router.route(task, memory.getHistory());
+        onLog(`Routing to: ${decision.toolName} (${decision.reason})`, 'thought');
         
         try {
-            // Case A: Local TPU (Direct)
-            if (brain instanceof TPUBrain) {
-                onLog('Routing to: Local TPU (Gemma)', 'thought');
-                // Use the TPU directly
-                const response = await brain.generate(task, (chunk) => {
-                    // Optional: could stream back via LOG or a specific STREAM event
-                    // onLog(chunk, 'stream'); // Assuming UI handles this
-                });
-                return response;
-            } 
-            
-            // Case B: Specialized MCP Agents
-            // Map the brain to a specific primary tool call
+            let resultText = "";
 
-            if (brain && brain === router.brains['jules']) {
-                onLog('Routing to: Google Jules (Coding)', 'thought');
+            // Case A: Specialized MCP Agents
+            if (decision.toolName === 'jules') {
                 const result = await host.callTool('jules', 'create_coding_session', { 
                     prompt: task, 
                     source: 'current' 
                 });
-                return result.content[0].text;
-            }
+                resultText = result.content ? result.content[0].text : JSON.stringify(result);
 
-            if (brain && brain === router.brains['stitch']) {
-                onLog('Routing to: Google Stitch (UI)', 'thought');
+            } else if (decision.toolName === 'stitch') {
                 const result = await host.callTool('stitch', 'generate_ui', { prompt: task });
-                return result.content[0].text;
-            }
+                resultText = result.content ? result.content[0].text : JSON.stringify(result);
 
-            if (brain && brain === router.brains['context7']) {
-                 onLog('Routing to: Context7 (Retrieval)', 'thought');
-                 // Assume a tool name for context7 - 'retrieve' or similar
-                 // If not known, we might need to inspect tools. For now, assuming standard name.
-                 const result = await host.callTool('context7', 'retrieve', { query: task });
-                 return result.content[0].text;
-            }
+            } else if (decision.toolName === 'context7') {
+                 // Hypothetical call
+                 // const result = await host.callTool('context7', 'retrieve', { query: task });
+                 // resultText = result.content[0].text;
+                 resultText = "Context7 search not fully implemented yet.";
 
-            // Case C: Android System Tools (SMS, etc) - Handled via Regex in Router?
-            // Or maybe checking if the task implies a tool use.
-            // For now, let's keep the simple SMS regex fallback if no brain picked it up (though Router defaults to TPU).
-            // Actually, if Router defaults to TPU, we rely on TPU to handle it or say "I can't".
-            // If we want SMS, we might need to add that logic to Router or here.
-
-            if (task.toLowerCase().includes('sms') || task.toLowerCase().includes('text')) {
+            } else if (decision.toolName === 'android') {
                  const match = task.match(/text (\d+) saying (.+)/);
                  if (match) {
-                     onLog(`Routing to: Android System (SMS) -> ${match[1]}`, 'tool');
-                     // This mimics the old behavior. Ideally we'd call the Android MCP tool.
-                     return "SMS Sent (Simulated via Bridge)";
+                     // In real app, call android MCP
+                     // await host.callTool('android', 'send_sms', { phone: match[1], message: match[2] });
+                     resultText = `SMS Sent to ${match[1]}: "${match[2]}" (Simulated)`;
+                 } else {
+                     // Fallback to local brain
+                     const messages = memory.getHistory();
+                     const response = await tpuBrain.chat(messages);
+                     resultText = response.content;
                  }
+            } else {
+                // Default: Local TPU
+                const messages = memory.getHistory();
+                // tpuBrain.chat uses the generate method internally
+                const response = await tpuBrain.chat(messages);
+                resultText = response.content;
             }
 
-            // Fallback
-            return "I'm not sure how to handle that task locally.";
+            memory.add('assistant', resultText);
+            return resultText;
             
         } catch (err) {
             onLog(`Error executing task: ${err.message}`, 'error');
