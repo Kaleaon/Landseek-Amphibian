@@ -95,7 +95,7 @@ class LocalBrain {
         console.error('All local brain models failed:', lastError?.message);
         return {
             role: 'assistant',
-            content: "I'm having trouble processing that right now. Please ensure Ollama is running with a compatible model (gemma:3-4b-it or gemma:2b)."
+            content: `I'm having trouble processing that right now. Please ensure Ollama is running with a compatible model (${this.model} or ${this.fallbackModel}).`
         };
     }
 

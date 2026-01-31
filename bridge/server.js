@@ -60,9 +60,15 @@ const memory = new ConversationMemory(50); // Extended memory for complex tasks
 
 // Android Bridge Callback (injected via JNI in production)
 let androidToolCallback = global.androidBridgeCallback || async function(toolName, args) {
-    console.log(`📱 Android Tool Called: ${toolName}`, args);
+    console.warn(`⚠️ Android Tool Called in SIMULATION MODE: ${toolName}`, args);
+    console.warn('   Set global.androidBridgeCallback for real Android integration');
     // Simulated response for testing outside Android
-    return { success: true, message: `${toolName} executed (simulated)`, data: args };
+    return { 
+        success: true, 
+        message: `${toolName} executed (simulated)`, 
+        data: args,
+        simulated: true  // Flag to indicate this was a simulated response
+    };
 };
 
 // Start MCP Servers (Brain Modules)

@@ -4,6 +4,7 @@ import android.content.Context
 import android.util.Log
 import com.google.mediapipe.tasks.genai.llminference.LlmInference
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import java.io.File
 
@@ -23,15 +24,25 @@ class LocalLLMService(private val context: Context) {
     private var llmInference: LlmInference? = null
     private var isInitialized = false
     
-    // Model configuration
+    // Model configuration - validates against path traversal
     private val PRIMARY_MODEL = "gemma-3-4b-it-gpu-int4.bin"
     private val FALLBACK_MODEL = "gemma-2b-it-gpu-int4.bin"
+    private val ALLOWED_MODEL_PATTERN = Regex("^[a-zA-Z0-9_.-]+\\.bin\$")
     
     // Generation parameters optimized for TPU
     private val MAX_TOKENS = 1024
     private val TOP_K = 40
     private val TEMPERATURE = 0.7f
     private val SEED = 1234
+    
+    private fun getValidModelFile(modelName: String): File? {
+        // Validate model name to prevent path traversal
+        if (!ALLOWED_MODEL_PATTERN.matches(modelName)) {
+            Log.w(TAG, "Invalid model name format: $modelName")
+            return null
+        }
+        return File(context.filesDir, "models/$modelName")
+    }
 
     suspend fun initialize(): Boolean {
         return withContext(Dispatchers.IO) {
@@ -44,7 +55,7 @@ class LocalLLMService(private val context: Context) {
             val models = listOf(PRIMARY_MODEL, FALLBACK_MODEL)
             
             for (modelName in models) {
-                val modelFile = File(context.filesDir, "models/$modelName")
+                val modelFile = getValidModelFile(modelName) ?: continue
                 
                 if (!modelFile.exists()) {
                     Log.w(TAG, "Model file not found: ${modelFile.absolutePath}")
@@ -132,7 +143,7 @@ class LocalLLMService(private val context: Context) {
                     builder.append(word).append(" ")
                     onToken(word + " ")
                     // Small delay for visual effect
-                    kotlinx.coroutines.delay(10)
+                    delay(10)
                 }
                 
                 return@withContext builder.toString().trim()
@@ -147,7 +158,7 @@ class LocalLLMService(private val context: Context) {
      * Check if a model file exists
      */
     fun isModelAvailable(modelName: String = PRIMARY_MODEL): Boolean {
-        val modelFile = File(context.filesDir, "models/$modelName")
+        val modelFile = getValidModelFile(modelName) ?: return false
         return modelFile.exists()
     }
 

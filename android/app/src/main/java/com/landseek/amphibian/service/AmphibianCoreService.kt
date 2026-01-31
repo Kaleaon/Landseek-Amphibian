@@ -56,9 +56,18 @@ class AmphibianCoreService : Service() {
     
     // Config
     private val PORT = 3000
-    private val AUTH_TOKEN = "amphibian_local_secret" // In prod, generate securely
     private val NOTIFICATION_CHANNEL_ID = "amphibian_brain"
     private val NOTIFICATION_ID = 1
+    
+    // Generate a secure random token for this session
+    private val AUTH_TOKEN: String by lazy {
+        val prefs = getSharedPreferences("amphibian_auth", Context.MODE_PRIVATE)
+        prefs.getString("auth_token", null) ?: run {
+            val newToken = java.util.UUID.randomUUID().toString()
+            prefs.edit().putString("auth_token", newToken).apply()
+            newToken
+        }
+    }
 
     override fun onCreate() {
         super.onCreate()
@@ -378,6 +387,7 @@ class AmphibianCoreService : Service() {
         nodeProcess?.destroy()
         webSocket?.close(1000, "Service Destroyed")
         llmService.close()
+        toolManager.destroy()
         Log.d(TAG, "Amphibian Service Destroyed")
     }
 
@@ -385,16 +395,15 @@ class AmphibianCoreService : Service() {
         return LocalBinder()
     }
     
+    companion object {
+        private val PID_REGEX = Regex("pid=(\\d+)")
+    }
+    
     private fun getProcessId(p: Process?): Long {
         return try {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                // Use ProcessHandle on Android O+
-                p?.toString()?.let { str ->
-                    Regex("pid=(\\d+)").find(str)?.groupValues?.get(1)?.toLongOrNull()
-                } ?: -1L
-            } else {
-                p?.toString()?.split("pid=")?.getOrNull(1)?.split("}")?.getOrNull(0)?.toLongOrNull() ?: -1L
-            }
+            p?.toString()?.let { str ->
+                PID_REGEX.find(str)?.groupValues?.get(1)?.toLongOrNull()
+            } ?: -1L
         } catch (e: Exception) { -1L }
     }
 }

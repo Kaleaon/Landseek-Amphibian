@@ -8,7 +8,10 @@ import android.util.Log
 import androidx.core.content.ContextCompat
 import org.json.JSONObject
 import java.io.File
-import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import com.landseek.amphibian.service.LocalLLMService
@@ -24,6 +27,9 @@ import com.landseek.amphibian.service.P2PSyncService
 class AndroidToolManager(private val context: Context) {
 
     private val TAG = "AmphibianTools"
+    
+    // Properly scoped coroutine context
+    private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
     data class ToolResult(val success: Boolean, val output: String)
 
@@ -32,7 +38,7 @@ class AndroidToolManager(private val context: Context) {
     private val syncService = P2PSyncService(context, ragService)
     
     init {
-        GlobalScope.launch { 
+        scope.launch { 
             ragService.initialize() 
             llmService.initialize()
             syncService.startServer() // Start listening for peers
@@ -132,7 +138,7 @@ class AndroidToolManager(private val context: Context) {
     }
 
     private fun syncPeer(ip: String): ToolResult {
-        GlobalScope.launch { syncService.syncWithPeer(ip) }
+        scope.launch { syncService.syncWithPeer(ip) }
         return ToolResult(true, "Sync initiated with $ip")
     }
 
@@ -142,5 +148,13 @@ class AndroidToolManager(private val context: Context) {
             llmService.generate(prompt)
         }
         return ToolResult(true, response)
+    }
+    
+    /**
+     * Cleanup resources when manager is destroyed
+     */
+    fun destroy() {
+        scope.cancel()
+        llmService.close()
     }
 }
