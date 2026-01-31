@@ -1,5 +1,7 @@
 #!/bin/bash
-# Note: Not using 'set -e' because we have expected failure paths
+# Note: Not using 'set -e' because this script intentionally handles download/extraction
+# failures by creating a placeholder binary. The script should continue executing after
+# these failures rather than exit immediately, allowing the build to proceed.
 
 # Configuration
 NODE_VERSION="v22.12.0"
