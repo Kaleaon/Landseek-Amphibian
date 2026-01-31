@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<full-backup-content>
+    <include domain="sharedpref" path="." />
+    <exclude domain="database" path="rag_memory.db" />
+    <exclude domain="file" path="node-bin/" />
+    <exclude domain="file" path="bridge/" />
+    <exclude domain="cache" path="." />
+</full-backup-content>

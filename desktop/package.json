@@ -1,0 +1,45 @@
+{
+  "name": "amphibian-desktop",
+  "version": "1.0.0",
+  "description": "Landseek-Amphibian Desktop Client - Cross-platform AI agent with collective training and inference",
+  "main": "main.js",
+  "bin": {
+    "amphibian": "./main.js"
+  },
+  "scripts": {
+    "start": "node main.js",
+    "build:win": "pkg . --targets node18-win-x64 --output dist/amphibian-win.exe",
+    "build:linux": "pkg . --targets node18-linux-x64 --output dist/amphibian-linux",
+    "build:mac": "pkg . --targets node18-macos-x64 --output dist/amphibian-macos",
+    "build:all": "npm run build:win && npm run build:linux && npm run build:mac",
+    "test": "echo \"Tests not yet implemented\" && exit 0"
+  },
+  "pkg": {
+    "assets": [
+      "../bridge/**/*"
+    ],
+    "scripts": [
+      "main.js"
+    ]
+  },
+  "keywords": [
+    "ai",
+    "llm",
+    "distributed",
+    "training",
+    "inference",
+    "collective"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "ws": "^8.16.0",
+    "axios": "^1.6.7",
+    "chalk": "^4.1.2",
+    "commander": "^11.1.0",
+    "readline": "^1.3.0"
+  },
+  "devDependencies": {
+    "pkg": "^5.8.1"
+  }
+}
