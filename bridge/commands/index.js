@@ -484,6 +484,97 @@ class CommandProcessor {
                 message: '🧠 Next inference will use the collective pool.'
             };
         });
+
+        // ============================================
+        // OPENCLAW OPEN POOL COMMANDS
+        // ============================================
+
+        // Start open pool
+        this.register('openpool', 'Start an OpenClaw open pool for any ClawBot', async (args) => {
+            const port = args.length > 0 ? parseInt(args[0]) : 8767;
+            const poolName = args.length > 1 ? args.slice(1).join(' ') : 'OpenClaw Public Pool';
+            
+            return {
+                message: `🌐 Starting OpenClaw pool "${poolName}" on port ${port}...`,
+                action: 'start_openpool',
+                data: { port, poolName }
+            };
+        }, '/openpool [port] [pool_name]');
+
+        // Join open pool as ClawBot
+        this.register('joinopen', 'Join an OpenClaw open pool as a ClawBot', async (args) => {
+            if (args.length === 0) {
+                return { message: 'Usage: /joinopen <host:port> [bot_name]' };
+            }
+            
+            const [host, port] = args[0].includes(':') ? args[0].split(':') : [args[0], '8767'];
+            const botName = args.length > 1 ? args.slice(1).join(' ') : null;
+            
+            return {
+                message: '🤖 Joining OpenClaw pool...',
+                action: 'join_openpool',
+                data: { host, port: parseInt(port), botName }
+            };
+        }, '/joinopen <host:port> [bot_name]');
+
+        // Leave open pool
+        this.register('leaveopen', 'Leave the OpenClaw pool', async () => {
+            return {
+                message: '👋 Leaving OpenClaw pool...',
+                action: 'leave_openpool'
+            };
+        });
+
+        // Open pool status
+        this.register('openstatus', 'Show OpenClaw pool status', async () => {
+            return {
+                action: 'openpool_status',
+                message: null
+            };
+        });
+
+        // Start open training
+        this.register('opentrain', 'Start open training on the pool', async (args) => {
+            const modelName = args.length > 0 ? args[0] : 'amphibian-lora';
+            
+            return {
+                message: `🎓 Starting open training for ${modelName}...`,
+                action: 'start_open_training',
+                data: { modelName }
+            };
+        }, '/opentrain [model_name]');
+
+        // Submit task to open pool
+        this.register('submittask', 'Submit a task to the OpenClaw pool', async (args, argsString) => {
+            if (args.length < 2) {
+                return { message: 'Usage: /submittask <type> <payload>\nTypes: inference, training, validation' };
+            }
+            
+            const taskType = args[0];
+            const payload = args.slice(1).join(' ');
+            
+            return {
+                message: `📤 Submitting ${taskType} task...`,
+                action: 'submit_open_task',
+                data: { taskType, payload }
+            };
+        }, '/submittask <type> <payload>');
+
+        // Show contribution leaderboard
+        this.register('leaderboard', 'Show OpenClaw contribution leaderboard', async () => {
+            return {
+                action: 'show_leaderboard',
+                message: null
+            };
+        });
+
+        // Claim available task
+        this.register('claimtask', 'Claim an available task from the pool', async () => {
+            return {
+                action: 'claim_task',
+                message: '🎯 Looking for available tasks...'
+            };
+        });
     }
 
     /**

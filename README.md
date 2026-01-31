@@ -1,27 +1,28 @@
 # 🐸 Landseek-Amphibian
 
-**The fully-integrated, APK-installable AI Agent System for Android.**
+**The fully-integrated, cross-platform AI Agent System with distributed inference and training.**
 
-> "Live on the land (Android UI) and in the water (System Shell)."
+> "Live on the land (Android/Desktop UI) and in the water (System Shell)."
 
 ## The Vision
 
-Landseek-Amphibian is a complete **on-device AI agent** that merges **Landseek** (the beautiful, TPU-optimized chat UI with 10 AI personalities) with **OpenClaw** (the powerful, tool-using agent runtime) into a **single, installable Android APK**.
+Landseek-Amphibian is a complete **cross-platform AI agent** that merges **Landseek** (the beautiful, TPU-optimized chat UI with 10 AI personalities) with **OpenClaw** (the powerful, tool-using agent runtime) into a **single, installable application** for Android, Windows, Linux, and macOS.
 
-**Goal:** No Termux setup. No command line. Just install the app, and you have a fully autonomous, tool-using AI agent on your phone.
+**Goal:** No complex setup. Just install the app, and you have a fully autonomous, tool-using AI agent on your device. Pool resources with other devices for distributed inference and training.
 
 ## ✨ Key Features
 
-- **📦 Single Install:** One APK contains the UI, the LLM engine (Gemma/Ollama), and the Agent Runtime.
-- **📱 Native UI:** 120Hz Jetpack Compose interface with dark mode support.
-- **🧠 On-Device TPU AI:** Runs Gemma 3 4B locally on Pixel TPU/NPU for private, offline inference.
-- **🎭 10 AI Personalities:** Chat with Nova, Echo, Sage, Spark, Atlas, Luna, Cipher, Muse, Phoenix, and Zen.
-- **🛠️ ClawdBot Tools:** Full suite of Android-native tools (SMS, Calls, Files, Memory, etc.).
-- **📄 Document Analysis:** Upload and analyze 70+ file formats (PDF, DOCX, images, code, etc.).
-- **🔌 MCP Protocol:** Model Context Protocol support for external AI services (Jules, Stitch, Context7).
-- **🌐 P2P Networking:** Host or join chat rooms, share LLM capabilities with others.
-- **🔄 Memory Sync:** Sync memories and context between Amphibian devices on local network.
-- **🎯 Smart Routing:** Automatic task classification routes requests to the best available brain.
+- **📦 Cross-Platform:** Android APK, Windows .exe, Linux binary, and macOS app
+- **📱 Native UI:** 120Hz Jetpack Compose interface on Android, CLI on desktop
+- **🧠 On-Device TPU AI:** Runs Gemma 3 4B locally on Pixel TPU/NPU for private, offline inference
+- **🎭 10 AI Personalities:** Chat with Nova, Echo, Sage, Spark, Atlas, Luna, Cipher, Muse, Phoenix, and Zen
+- **🛠️ ClawdBot Tools:** Full suite of Android-native tools (SMS, Calls, Files, Memory, etc.)
+- **📄 Document Analysis:** Upload and analyze 70+ file formats (PDF, DOCX, images, code, etc.)
+- **🔌 MCP Protocol:** Model Context Protocol support for external AI services (Jules, Stitch, Context7)
+- **🌐 Collective Mode:** Pool resources across multiple devices for distributed inference
+- **🎓 Distributed Training:** Train AI models across pooled devices
+- **🔄 Memory Sync:** Sync memories and context between Amphibian devices on local network
+- **🎯 Smart Routing:** Automatic task classification routes requests to the best available brain
 
 ## 🎭 AI Personalities
 
@@ -163,6 +164,219 @@ Collective Mode is designed from the ground up to work even with high network la
 6. **Partial Results**: If a task times out but has partial results, those are used rather than failing completely.
 
 7. **Device Reliability Scoring**: Devices that frequently fail or timeout are deprioritized for future tasks.
+
+## 🎓 Distributed Training
+
+Pool compute resources across devices to train AI models together. Perfect for:
+- Fine-tuning models on custom data
+- LoRA/adapter training with limited hardware
+- Collaborative learning across a team
+
+### Starting Distributed Training
+
+1. **Start a collective pool** (coordinator device):
+```
+You: /collective
+🌐 Collective pool started!
+   Share code: Y29sbGVjdGl2ZToxOTIuMTY4...
+```
+
+2. **Start training** (on coordinator):
+```
+You: /train
+🎓 Distributed training started!
+   Model: amphibian-lora
+   Batch size: 4
+   Learning rate: 0.0001
+```
+
+3. **Join training** (worker devices):
+```
+You: /jointrain Y29sbGVjdGl2ZToxOTIuMTY4...
+🎓 Joined training as worker!
+   Your device will contribute gradients to training.
+```
+
+### Training Commands
+
+| Command | Description |
+|---------|-------------|
+| `/train` | Start distributed training as coordinator |
+| `/jointrain <share_code>` | Join training as a worker |
+| `/trainstatus` | Show training progress |
+| `/stoptrain` | Stop training |
+
+### How Distributed Training Works
+
+1. **Coordinator** distributes training batches to workers
+2. **Workers** compute gradients locally using their hardware
+3. **Gradients** are submitted back to coordinator
+4. **Coordinator** aggregates gradients (weighted by staleness)
+5. **Updated weights** are broadcast to all workers
+6. Repeat until training completes
+
+### Training Features for High Latency
+
+- **Stale Gradient Handling**: Gradients computed on older weights are weighted lower but still used
+- **Gradient Compression**: Sparsification reduces network overhead
+- **Async Updates**: Workers don't need to wait for synchronization
+- **Automatic Checkpointing**: Progress is saved periodically
+- **Fault Tolerance**: Training continues if workers disconnect
+
+## 💻 Desktop Application
+
+Amphibian Desktop brings the full Amphibian experience to Windows, Linux, and macOS.
+
+### Quick Start (Development)
+
+```bash
+# Run directly with Node.js
+./scripts/desktop/run.sh
+
+# Or manually:
+cd desktop
+npm install
+node main.js
+```
+
+### Building Executables
+
+```bash
+# Build for all platforms
+./scripts/desktop/build_all.sh
+
+# Or build for specific platform
+cd desktop
+npm run build:win    # Windows .exe
+npm run build:linux  # Linux binary
+npm run build:mac    # macOS binary
+```
+
+### Desktop Commands
+
+```
+🐸 Landseek-Amphibian Desktop
+
+Collective Mode:
+  /collective [port]     Start a collective pool (default port: 8766)
+  /pool <share_code>     Join an existing collective pool
+  /unpool               Leave the collective pool
+  /poolstatus           Show collective pool status
+
+Distributed Training:
+  /train                Start distributed training as coordinator
+  /jointrain            Join training as a worker
+  /trainstatus          Show training progress
+  /stoptrain            Stop training
+
+General:
+  /status               Show overall status
+  /help                 Show this help
+  /quit                 Exit the application
+
+Chat:
+  Just type any message to chat with the AI
+```
+
+## 🤖 OpenClaw - Open Computation Pool
+
+OpenClaw is a decentralized system that allows **any ClawBot** to contribute computation to shared training and inference tasks. No authentication required - just connect and contribute!
+
+### Key Features
+
+- **Open Registration**: Any ClawBot can join without approval
+- **Public Task Pool**: Tasks available for any capable bot to claim
+- **Contribution Tracking**: Fair attribution of compute contributions
+- **Reputation System**: Reliable bots get priority for tasks
+- **Open Training**: Collaborative model training across all participants
+
+### Starting an OpenClaw Pool
+
+```bash
+# From Android or Desktop
+/openpool 8767 "My Open Pool"
+
+# Output:
+🌐 OpenClaw Pool started!
+   Pool: My Open Pool
+   Port: 8767
+   Connect: ws://192.168.1.100:8767
+```
+
+### Joining as a ClawBot
+
+```bash
+# Join an open pool
+/joinopen 192.168.1.100:8767 MyClawBot
+
+# Output:
+🤖 Registered as MyClawBot!
+   Pool: My Open Pool
+   Available tasks: 5
+```
+
+### OpenClaw Commands
+
+| Command | Description |
+|---------|-------------|
+| `/openpool [port] [name]` | Start an OpenClaw open pool |
+| `/joinopen <host:port> [name]` | Join a pool as a ClawBot |
+| `/leaveopen` | Leave the OpenClaw pool |
+| `/openstatus` | Show pool status |
+| `/opentrain [model]` | Start open training |
+| `/submittask <type> <payload>` | Submit a task to the pool |
+| `/leaderboard` | Show contribution leaderboard |
+| `/claimtask` | Claim an available task |
+
+### Bot Capability Levels
+
+| Level | Description | Task Types |
+|-------|-------------|------------|
+| `minimal` | Can only relay tasks | - |
+| `basic` | Simple inference | Inference |
+| `standard` | Full inference | Inference, Embedding |
+| `advanced` | Training capable | All + Training |
+| `gpu` | GPU acceleration | All (Priority) |
+| `tpu` | TPU/NPU acceleration | All (Highest Priority) |
+
+### How Open Training Works
+
+1. **Pool Owner** starts open training with `/opentrain`
+2. **ClawBots** automatically receive training batches
+3. **Each Bot** computes gradients locally
+4. **Gradients** are submitted to the pool
+5. **Pool** aggregates gradients from all participants
+6. **Updated weights** are broadcast to all bots
+7. **Contributions** are tracked for fair attribution
+
+### Contribution Scoring
+
+Contributions are scored based on:
+- **Inference tasks**: 1 point each
+- **Training tasks**: 5 points each
+- **Gradients submitted**: 2 points each
+- **Validation tasks**: 1 point each
+
+Scores decay slightly over time to reward consistent participation.
+
+### REST API Endpoints
+
+The OpenClaw pool exposes REST endpoints:
+
+| Endpoint | Description |
+|----------|-------------|
+| `GET /status` | Pool status and statistics |
+| `GET /tasks` | Available tasks |
+| `GET /leaderboard` | Top contributors |
+
+### System Requirements (Desktop)
+
+| Platform | Requirements |
+|----------|-------------|
+| **Windows** | Windows 10/11, x64 |
+| **Linux** | Ubuntu 18.04+, Debian 10+, or similar x64 distro |
+| **macOS** | macOS 10.15+ (Catalina or later), x64 or ARM64 |
+| **All** | Node.js 18+ (for development), Ollama (optional, for local inference) |
 
 ## 🛠️ Available Tools (ClawdBot)
 
