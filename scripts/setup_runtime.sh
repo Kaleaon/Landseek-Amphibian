@@ -1,5 +1,7 @@
 #!/bin/bash
-set -e
+# Note: Not using 'set -e' because this script intentionally handles download/extraction
+# failures by creating a placeholder binary. The script should continue executing after
+# these failures rather than exit immediately, allowing the build to proceed.
 
 # Configuration
 NODE_VERSION="v22.12.0"
@@ -18,45 +20,7 @@ echo ""
 # Create target directory
 mkdir -p "$TARGET_DIR"
 
-# Check if we're on a system that can build for Android
-if command -v ndk-build &> /dev/null; then
-    echo "📦 Android NDK detected. Building Node.js from source..."
-    echo "⚠️  This process requires significant time and resources."
-    echo "   For faster development, use a pre-built binary."
-fi
-
-# Option 1: Use nodejs-mobile prebuilt binary (recommended for development)
-echo ""
-echo "📥 Downloading Node.js for Android ARM64..."
-echo "   Source: nodejs-mobile project"
-echo ""
-
-DOWNLOAD_URL="https://github.com/nicknisi/nodejs-mobile/releases/download/v18.19.0/nodejs-mobile-v18.19.0-android-arm64.tar.gz"
-TEMP_DIR=$(mktemp -d)
-
-# Try to download, fall back to placeholder if network unavailable
-if curl -L --connect-timeout 10 -o "$TEMP_DIR/node.tar.gz" "$DOWNLOAD_URL" 2>/dev/null; then
-    echo "✅ Download complete. Extracting..."
-    tar -xzf "$TEMP_DIR/node.tar.gz" -C "$TEMP_DIR"
-    
-    # Find and copy the node binary
-    NODE_BIN=$(find "$TEMP_DIR" -name "node" -type f | head -1)
-    if [ -n "$NODE_BIN" ]; then
-        cp "$NODE_BIN" "$TARGET_DIR/node"
-        chmod +x "$TARGET_DIR/node"
-        echo "✅ Node.js binary installed at $TARGET_DIR/node"
-    else
-        echo "⚠️  Could not find node binary in archive"
-        create_placeholder
-    fi
-    
-    rm -rf "$TEMP_DIR"
-else
-    echo "⚠️  Could not download Node.js binary (network issue or unavailable)"
-    echo "   Creating placeholder for development..."
-    create_placeholder
-fi
-
+# Function to create placeholder binary
 create_placeholder() {
     cat > "$TARGET_DIR/node" << 'EOF'
 #!/system/bin/sh
@@ -74,6 +38,57 @@ exit 1
 EOF
     chmod +x "$TARGET_DIR/node"
 }
+
+# Check if we're on a system that can build for Android
+if command -v ndk-build &> /dev/null; then
+    echo "📦 Android NDK detected. Building Node.js from source..."
+    echo "⚠️  This process requires significant time and resources."
+    echo "   For faster development, use a pre-built binary."
+fi
+
+# Option 1: Use nodejs-mobile prebuilt binary (recommended for development)
+echo ""
+echo "📥 Downloading Node.js for Android ARM64..."
+echo "   Source: nodejs-mobile project"
+echo ""
+
+DOWNLOAD_URL="https://github.com/nicknisi/nodejs-mobile/releases/download/v18.19.0/nodejs-mobile-v18.19.0-android-arm64.tar.gz"
+TEMP_DIR=$(mktemp -d)
+
+# Try to download, fall back to placeholder if network unavailable
+HTTP_CODE=$(curl -L --connect-timeout 10 -w "%{http_code}" -o "$TEMP_DIR/node.tar.gz" "$DOWNLOAD_URL" 2>/dev/null)
+
+if [ "$HTTP_CODE" = "200" ] && [ -f "$TEMP_DIR/node.tar.gz" ]; then
+    # Verify it's actually a gzip file before trying to extract
+    if file "$TEMP_DIR/node.tar.gz" | grep -q "gzip compressed data"; then
+        echo "✅ Download complete. Extracting..."
+        if tar -xzf "$TEMP_DIR/node.tar.gz" -C "$TEMP_DIR" 2>/dev/null; then
+            # Find and copy the node binary
+            NODE_BIN=$(find "$TEMP_DIR" -name "node" -type f | head -1)
+            if [ -n "$NODE_BIN" ]; then
+                cp "$NODE_BIN" "$TARGET_DIR/node"
+                chmod +x "$TARGET_DIR/node"
+                echo "✅ Node.js binary installed at $TARGET_DIR/node"
+            else
+                echo "⚠️  Could not find node binary in archive"
+                create_placeholder
+            fi
+        else
+            echo "⚠️  Failed to extract archive"
+            create_placeholder
+        fi
+    else
+        echo "⚠️  Downloaded file is not a valid gzip archive (HTTP $HTTP_CODE)"
+        create_placeholder
+    fi
+    
+    rm -rf "$TEMP_DIR"
+else
+    echo "⚠️  Could not download Node.js binary (HTTP $HTTP_CODE)"
+    echo "   Creating placeholder for development..."
+    rm -rf "$TEMP_DIR"
+    create_placeholder
+fi
 
 # Verify the binary
 echo ""
