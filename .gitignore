@@ -34,3 +34,5 @@ temp/
 
 # Extracted bridge code (generated at build time)
 android/app/src/main/assets/bridge/node_modules/
+android/app/src/main/assets/bridge/.version
+android/app/src/main/assets/node-bin/node
