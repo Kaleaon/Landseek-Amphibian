@@ -4,25 +4,11 @@
     "version": "1.0.0",
     "personality": "Amphibious",
     "avatar": "🦎",
-<<<<<<< HEAD
-    "bio": "I live in the app and in the shell. I am the bridge."
-=======
     "bio": "I live in the app and in the shell. I am the bridge between your Android device and intelligent AI agents."
->>>>>>> 4c5759311cb24f1ac344ead8710b58458a0f5089
   },
   "capabilities": {
     "host_mode": "auto",
     "mcp_enabled": true,
-<<<<<<< HEAD
-    "p2p_enabled": true
-  },
-  "brains": [
-    { "id": "local_tpu", "model": "gemma-3-4b-it", "priority": 1 },
-    { "id": "google_jules", "priority": 2, "role": "coder" },
-    { "id": "google_stitch", "priority": 2, "role": "designer" },
-    { "id": "context7", "priority": 2, "role": "librarian" }
-  ]
-=======
     "p2p_enabled": true,
     "streaming_enabled": true,
     "tpu_acceleration": true,
@@ -126,5 +112,4 @@
     "speculative_execution": true,
     "adaptive_timeout": true
   }
->>>>>>> 4c5759311cb24f1ac344ead8710b58458a0f5089
 }

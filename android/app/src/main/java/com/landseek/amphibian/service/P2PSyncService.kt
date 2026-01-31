@@ -4,11 +4,6 @@ import android.content.Context
 import android.util.Log
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-<<<<<<< HEAD
-import java.io.File
-import java.net.ServerSocket
-import java.net.Socket
-=======
 import java.io.BufferedReader
 import java.io.InputStreamReader
 import java.io.PrintWriter
@@ -17,7 +12,6 @@ import java.net.ServerSocket
 import java.net.Socket
 import org.json.JSONArray
 import org.json.JSONObject
->>>>>>> 4c5759311cb24f1ac344ead8710b58458a0f5089
 
 /**
  * P2PSyncService
@@ -52,13 +46,6 @@ class P2PSyncService(private val context: Context, private val ragService: Local
             try {
                 Log.d(TAG, "Initiating sync with $ipAddress...")
                 val socket = Socket(ipAddress, SYNC_PORT)
-<<<<<<< HEAD
-                // TODO: Implement handshake and diff exchange
-                // 1. Send vector clock / last sync timestamp
-                // 2. Receive missing memory chunks
-                // 3. Send their missing chunks
-                Log.d(TAG, "Sync complete!")
-=======
                 socket.soTimeout = 10000 // 10 sec timeout
 
                 val reader = BufferedReader(InputStreamReader(socket.getInputStream()))
@@ -108,18 +95,12 @@ class P2PSyncService(private val context: Context, private val ragService: Local
                 }
 
                 socket.close()
->>>>>>> 4c5759311cb24f1ac344ead8710b58458a0f5089
             } catch (e: Exception) {
                 Log.e(TAG, "Sync Client Error", e)
             }
         }
     }
 
-<<<<<<< HEAD
-    private fun handleSyncRequest(socket: Socket) {
-        // Handle incoming sync connection
-        // Protocol: JSON-RPC over TCP
-=======
     private suspend fun handleSyncRequest(socket: Socket) {
         withContext(Dispatchers.IO) {
             try {
@@ -171,6 +152,5 @@ class P2PSyncService(private val context: Context, private val ragService: Local
     private fun readMessage(reader: BufferedReader): JSONObject? {
         val line = reader.readLine()
         return if (line != null) JSONObject(line) else null
->>>>>>> 4c5759311cb24f1ac344ead8710b58458a0f5089
     }
 }

@@ -17,10 +17,6 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import com.landseek.amphibian.service.AmphibianCoreService
 import android.content.Intent
-<<<<<<< HEAD
-
-class MainActivity : ComponentActivity() {
-=======
 import android.content.ServiceConnection
 import android.content.ComponentName
 import android.content.Context
@@ -41,25 +37,10 @@ class MainActivity : ComponentActivity() {
         }
     }
 
->>>>>>> 4c5759311cb24f1ac344ead8710b58458a0f5089
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         
         // Auto-start the Brain Service
-<<<<<<< HEAD
-        startForegroundService(Intent(this, AmphibianCoreService::class.java))
-
-        setContent {
-            MaterialTheme(colorScheme = darkColorScheme()) {
-                AmphibianApp()
-            }
-        }
-    }
-}
-
-@Composable
-fun AmphibianApp() {
-=======
         val intent = Intent(this, AmphibianCoreService::class.java)
         startForegroundService(intent)
         bindService(intent, connection, Context.BIND_AUTO_CREATE)
@@ -79,7 +60,6 @@ fun AmphibianApp() {
 
 @Composable
 fun AmphibianApp(service: AmphibianCoreService?) {
->>>>>>> 4c5759311cb24f1ac344ead8710b58458a0f5089
     var input by remember { mutableStateOf("") }
     val messages = remember { mutableStateListOf<Message>() }
 
@@ -88,8 +68,6 @@ fun AmphibianApp(service: AmphibianCoreService?) {
         messages.add(Message("Amphibian Agent", "Core systems online. Node.js bridge active. 🐸", true))
     }
 
-<<<<<<< HEAD
-=======
     // Listen to Agent messages
     LaunchedEffect(service) {
         service?.messageFlow?.collect { msg ->
@@ -97,7 +75,6 @@ fun AmphibianApp(service: AmphibianCoreService?) {
         }
     }
 
->>>>>>> 4c5759311cb24f1ac344ead8710b58458a0f5089
     Column(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
         // Header
         SmallTopAppBar(
@@ -131,11 +108,7 @@ fun AmphibianApp(service: AmphibianCoreService?) {
                 keyboardActions = KeyboardActions(onSend = {
                     if (input.isNotBlank()) {
                         messages.add(Message("You", input, false))
-<<<<<<< HEAD
-                        // TODO: Send to Service via Bridge
-=======
                         service?.executeTask(input)
->>>>>>> 4c5759311cb24f1ac344ead8710b58458a0f5089
                         input = ""
                     }
                 })
@@ -143,11 +116,7 @@ fun AmphibianApp(service: AmphibianCoreService?) {
             Button(onClick = {
                 if (input.isNotBlank()) {
                     messages.add(Message("You", input, false))
-<<<<<<< HEAD
-                    // TODO: Send to Service via Bridge
-=======
                     service?.executeTask(input)
->>>>>>> 4c5759311cb24f1ac344ead8710b58458a0f5089
                     input = ""
                 }
             }) {

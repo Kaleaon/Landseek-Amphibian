@@ -1,16 +1,5 @@
 package com.landseek.amphibian.service
 
-<<<<<<< HEAD
-import android.app.Service
-import android.content.Intent
-import android.os.IBinder
-import android.util.Log
-import kotlinx.coroutines.*
-import okhttp3.*
-import org.json.JSONObject
-import java.io.File
-import java.util.concurrent.TimeUnit
-=======
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -30,7 +19,6 @@ import java.io.File
 import java.io.FileOutputStream
 import java.util.concurrent.TimeUnit
 import com.landseek.amphibian.tools.AndroidToolManager
->>>>>>> 4c5759311cb24f1ac344ead8710b58458a0f5089
 
 /**
  * AmphibianCoreService
@@ -39,12 +27,8 @@ import com.landseek.amphibian.tools.AndroidToolManager
  * 1. Extracting the Node.js runtime from assets (if needed).
  * 2. Spawning the Node.js process ("The Brain").
  * 3. Maintaining the WebSocket bridge to the local Node server.
-<<<<<<< HEAD
- * 4. Exposing the Agent's capabilities to the UI.
-=======
  * 4. Handling Android tool callbacks from the Agent.
  * 5. Managing on-device AI via TPU/MediaPipe.
->>>>>>> 4c5759311cb24f1ac344ead8710b58458a0f5089
  */
 class AmphibianCoreService : Service() {
 
@@ -53,19 +37,6 @@ class AmphibianCoreService : Service() {
     private var webSocket: WebSocket? = null
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     
-<<<<<<< HEAD
-    // Config
-    private val PORT = 3000
-    private val AUTH_TOKEN = "amphibian_local_secret" // In prod, generate this safely
-
-    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        Log.d(TAG, "Amphibian Service Starting...")
-        
-        scope.launch {
-            bootstrapRuntime()
-            startNodeProcess()
-            connectBridge()
-=======
     // Tool Manager for native Android capabilities
     private lateinit var toolManager: AndroidToolManager
     private lateinit var llmService: LocalLLMService
@@ -131,14 +102,11 @@ class AmphibianCoreService : Service() {
                 Log.e(TAG, "Service startup failed", e)
                 updateNotification("Error: ${e.message}")
             }
->>>>>>> 4c5759311cb24f1ac344ead8710b58458a0f5089
         }
 
         return START_STICKY
     }
 
-<<<<<<< HEAD
-=======
     private fun createNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val channel = NotificationChannel(
@@ -175,20 +143,11 @@ class AmphibianCoreService : Service() {
         manager.notify(NOTIFICATION_ID, createNotification(status))
     }
 
->>>>>>> 4c5759311cb24f1ac344ead8710b58458a0f5089
     private fun bootstrapRuntime() {
         val binDir = File(filesDir, "bin")
         if (!binDir.exists()) binDir.mkdirs()
 
         val nodeBin = File(binDir, "node")
-<<<<<<< HEAD
-        
-        // Simulating extraction logic
-        if (!nodeBin.exists()) {
-            Log.d(TAG, "Extracting Node binary from assets...")
-            // TODO: AssetManager.open("node-bin/node").copyTo(nodeBin)
-            // nodeBin.setExecutable(true)
-=======
         val openclawDir = File(filesDir, "openclaw/bridge")
         
         // Extract Node binary from assets
@@ -241,16 +200,11 @@ class AmphibianCoreService : Service() {
             Log.d(TAG, "✅ Extracted asset folder: $assetPath")
         } catch (e: Exception) {
             Log.e(TAG, "Failed to extract assets from $assetPath", e)
->>>>>>> 4c5759311cb24f1ac344ead8710b58458a0f5089
         }
     }
 
     private fun startNodeProcess() {
-<<<<<<< HEAD
-        Log.d(TAG, "Spawning Node.js process...")
-=======
         Log.d(TAG, "🚀 Spawning Node.js process...")
->>>>>>> 4c5759311cb24f1ac344ead8710b58458a0f5089
         try {
             val binDir = File(filesDir, "bin")
             val scriptPath = File(filesDir, "openclaw/bridge/server.js").absolutePath
@@ -263,18 +217,6 @@ class AmphibianCoreService : Service() {
             val env = pb.environment()
             env["AMPHIBIAN_PORT"] = PORT.toString()
             env["AMPHIBIAN_TOKEN"] = AUTH_TOKEN
-<<<<<<< HEAD
-            // Pass Android-specific paths for tool access
-            env["ANDROID_FILES_DIR"] = filesDir.absolutePath
-            
-            pb.directory(filesDir)
-            nodeProcess = pb.start()
-            
-            Log.d(TAG, "Node process spawned! PID: ${getProcessId(nodeProcess)}")
-            
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to spawn node process", e)
-=======
             env["ANDROID_FILES_DIR"] = filesDir.absolutePath
             env["OLLAMA_URL"] = "http://127.0.0.1:11434"
             env["TPU_MODEL"] = "gemma:3-4b-it"
@@ -294,22 +236,13 @@ class AmphibianCoreService : Service() {
             
         } catch (e: Exception) {
             Log.e(TAG, "❌ Failed to spawn node process", e)
->>>>>>> 4c5759311cb24f1ac344ead8710b58458a0f5089
         }
     }
 
     private fun connectBridge() {
-<<<<<<< HEAD
-        // Wait a moment for Node to boot
-        Thread.sleep(2000)
-        
-        val client = OkHttpClient.Builder()
-            .readTimeout(0, TimeUnit.MILLISECONDS)
-=======
         val client = OkHttpClient.Builder()
             .readTimeout(0, TimeUnit.MILLISECONDS)
             .pingInterval(30, TimeUnit.SECONDS)
->>>>>>> 4c5759311cb24f1ac344ead8710b58458a0f5089
             .build()
 
         val request = Request.Builder()
@@ -319,18 +252,6 @@ class AmphibianCoreService : Service() {
 
         webSocket = client.newWebSocket(request, object : WebSocketListener() {
             override fun onOpen(webSocket: WebSocket, response: Response) {
-<<<<<<< HEAD
-                Log.d(TAG, "Connected to Amphibian Bridge! 🐸")
-            }
-
-            override fun onMessage(webSocket: WebSocket, text: String) {
-                Log.d(TAG, "Agent Says: $text")
-                // TODO: Broadcast this to the UI via LiveData/Flow
-            }
-
-            override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
-                Log.e(TAG, "Bridge connection failed", t)
-=======
                 Log.d(TAG, "🐸 Connected to Amphibian Bridge!")
                 isConnected = true
                 reconnectAttempts = 0
@@ -361,41 +282,10 @@ class AmphibianCoreService : Service() {
             override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
                 Log.d(TAG, "Bridge closed: $reason")
                 isConnected = false
->>>>>>> 4c5759311cb24f1ac344ead8710b58458a0f5089
             }
         })
     }
     
-<<<<<<< HEAD
-    // Command Interface for UI
-    fun executeTask(taskDescription: String) {
-        val json = JSONObject()
-        json.put("type", "EXECUTE_TASK")
-        
-        val payload = JSONObject()
-        payload.put("task", taskDescription)
-        json.put("payload", payload)
-        
-        webSocket?.send(json.toString())
-    }
-
-    override fun onDestroy() {
-        super.onDestroy()
-        nodeProcess?.destroy()
-        webSocket?.close(1000, "Service Destroyed")
-    }
-
-    override fun onBind(intent: Intent?): IBinder? {
-        // TODO: Return Binder for UI communication
-        return null
-    }
-    
-    // Java 9+ ProcessHandle workaround for older Android APIs if needed
-    private fun getProcessId(p: Process?): Long {
-        return try {
-            p?.toString()?.split("pid=")?.get(1)?.split("}")?.get(0)?.toLong() ?: -1
-        } catch (e: Exception) { -1 }
-=======
     private fun handleAgentMessage(text: String) {
         scope.launch {
             try {
@@ -515,6 +405,5 @@ class AmphibianCoreService : Service() {
                 PID_REGEX.find(str)?.groupValues?.get(1)?.toLongOrNull()
             } ?: -1L
         } catch (e: Exception) { -1L }
->>>>>>> 4c5759311cb24f1ac344ead8710b58458a0f5089
     }
 }

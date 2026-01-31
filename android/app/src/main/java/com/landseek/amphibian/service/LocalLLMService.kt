@@ -4,10 +4,7 @@ import android.content.Context
 import android.util.Log
 import com.google.mediapipe.tasks.genai.llminference.LlmInference
 import kotlinx.coroutines.Dispatchers
-<<<<<<< HEAD
-=======
 import kotlinx.coroutines.delay
->>>>>>> 4c5759311cb24f1ac344ead8710b58458a0f5089
 import kotlinx.coroutines.withContext
 import java.io.File
 
@@ -15,63 +12,16 @@ import java.io.File
  * LocalLLMService
  * 
  * Runs Gemma 3 locally on the device using MediaPipe GenAI.
-<<<<<<< HEAD
- * Optimized for Pixel TPU/GPU.
-=======
  * Optimized for Pixel TPU/GPU with automatic fallback.
  * 
  * Supported models:
  * - gemma-3-4b-it-gpu-int4.bin (4B model, best quality)
  * - gemma-2b-it-gpu-int4.bin (2B model, faster)
->>>>>>> 4c5759311cb24f1ac344ead8710b58458a0f5089
  */
 class LocalLLMService(private val context: Context) {
 
     private val TAG = "AmphibianLLM"
     private var llmInference: LlmInference? = null
-<<<<<<< HEAD
-    
-    // Model Path (in app storage)
-    private val MODEL_NAME = "gemma-2b-it-gpu-int4.bin"
-
-    suspend fun initialize() {
-        withContext(Dispatchers.IO) {
-            val modelFile = File(context.filesDir, MODEL_NAME)
-            if (!modelFile.exists()) {
-                Log.w(TAG, "Model file not found: ${modelFile.absolutePath}")
-                return@withContext
-            }
-
-            Log.d(TAG, "Initializing Local LLM (MediaPipe)...")
-            val options = LlmInference.LlmInferenceOptions.builder()
-                .setModelPath(modelFile.absolutePath)
-                .setMaxTokens(1024)
-                .setTopK(40)
-                .setTemperature(0.7f)
-                .setRandomSeed(1234)
-                .build()
-
-            llmInference = LlmInference.createFromOptions(context, options)
-            Log.d(TAG, "Local LLM Initialized! 🦎")
-        }
-    }
-
-    suspend fun generate(prompt: String): String {
-        return withContext(Dispatchers.Default) {
-            if (llmInference == null) {
-                // Try to init if missing
-                initialize()
-                if (llmInference == null) return@withContext "Error: LLM not initialized. Model missing?"
-            }
-            
-            try {
-                Log.d(TAG, "Generating response for: ${prompt.take(50)}...")
-                val result = llmInference?.generateResponse(prompt) ?: "Error: Inference returned null"
-                Log.d(TAG, "Generation complete.")
-                return@withContext result
-            } catch (e: Exception) {
-                Log.e(TAG, "Inference failed", e)
-=======
     private var isInitialized = false
     
     // Model configuration - validates against path traversal
@@ -162,17 +112,10 @@ class LocalLLMService(private val context: Context) {
                 return@withContext result
             } catch (e: Exception) {
                 Log.e(TAG, "❌ Inference failed: ${e.message}", e)
->>>>>>> 4c5759311cb24f1ac344ead8710b58458a0f5089
                 return@withContext "Error: ${e.message}"
             }
         }
     }
-<<<<<<< HEAD
-    
-    fun close() {
-        // Cleanup native resources
-        // llmInference?.close() // (If API supports it)
-=======
 
     /**
      * Stream generation - yields partial results for real-time UI updates
@@ -245,6 +188,5 @@ class LocalLLMService(private val context: Context) {
         } catch (e: Exception) {
             Log.e(TAG, "Error closing LLM", e)
         }
->>>>>>> 4c5759311cb24f1ac344ead8710b58458a0f5089
     }
 }

@@ -11,14 +11,8 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
-<<<<<<< HEAD
-    "@modelcontextprotocol/sdk": "^0.6.0",
-    "axios": "^1.6.7",
-    "ws": "^8.19.0"
-=======
     "ws": "^8.16.0",
     "axios": "^1.6.7",
     "@modelcontextprotocol/sdk": "^0.6.0"
->>>>>>> 4c5759311cb24f1ac344ead8710b58458a0f5089
   }
 }

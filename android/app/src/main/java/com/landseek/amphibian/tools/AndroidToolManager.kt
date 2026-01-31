@@ -8,8 +8,6 @@ import android.util.Log
 import androidx.core.content.ContextCompat
 import org.json.JSONObject
 import java.io.File
-<<<<<<< HEAD
-=======
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -19,7 +17,6 @@ import kotlinx.coroutines.runBlocking
 import com.landseek.amphibian.service.LocalLLMService
 import com.landseek.amphibian.service.LocalRAGService
 import com.landseek.amphibian.service.P2PSyncService
->>>>>>> 4c5759311cb24f1ac344ead8710b58458a0f5089
 
 /**
  * AndroidToolManager
@@ -30,18 +27,6 @@ import com.landseek.amphibian.service.P2PSyncService
 class AndroidToolManager(private val context: Context) {
 
     private val TAG = "AmphibianTools"
-<<<<<<< HEAD
-
-    data class ToolResult(val success: Boolean, val output: String)
-
-    private val llmService = com.landseek.amphibian.service.LocalLLMService(context)
-    private val ragService = com.landseek.amphibian.service.LocalRAGService(context)
-    private val syncService = com.landseek.amphibian.service.P2PSyncService(context, ragService)
-    
-    init {
-        kotlinx.coroutines.GlobalScope.launch { 
-            ragService.initialize() 
-=======
     
     // Properly scoped coroutine context
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
@@ -56,7 +41,6 @@ class AndroidToolManager(private val context: Context) {
         scope.launch { 
             ragService.initialize() 
             llmService.initialize()
->>>>>>> 4c5759311cb24f1ac344ead8710b58458a0f5089
             syncService.startServer() // Start listening for peers
         }
     }
@@ -64,10 +48,6 @@ class AndroidToolManager(private val context: Context) {
     fun executeTool(name: String, args: JSONObject): ToolResult {
         return try {
             when (name) {
-<<<<<<< HEAD
-                // ... (previous tools)
-                "recall" -> recall(args.getString("query"))
-=======
                 "send_sms" -> sendSms(args.getString("phone"), args.getString("message"))
                 "make_call" -> makeCall(args.getString("phone"))
                 "read_file" -> readFile(args.getString("path"))
@@ -77,41 +57,16 @@ class AndroidToolManager(private val context: Context) {
                 "remember" -> remember(args.getString("content"))
                 "recall" -> recall(args.getString("query"))
                 "inference" -> runInference(args.getString("prompt"))
->>>>>>> 4c5759311cb24f1ac344ead8710b58458a0f5089
                 "sync_peer" -> syncPeer(args.getString("ip"))
                 else -> ToolResult(false, "Unknown tool: $name")
             }
         } catch (e: Exception) {
-<<<<<<< HEAD
-            // ...
-        }
-    }
-    
-    // ...
-
-    private fun syncPeer(ip: String): ToolResult {
-        kotlinx.coroutines.GlobalScope.launch { syncService.syncWithPeer(ip) }
-        return ToolResult(true, "Sync initiated with $ip")
-    }
-
-
-    private fun runInference(prompt: String): ToolResult {
-        // This is a blocking call in this simple architecture
-        // Ideally handled via async/callback, but for MVP:
-        val response = kotlinx.coroutines.runBlocking {
-            llmService.generate(prompt)
-        }
-        return ToolResult(true, response)
-    }
-}
-=======
             Log.e(TAG, "Tool execution error: ${e.message}", e)
             ToolResult(false, "Tool execution failed: ${e.message}")
         }
     }
 
     private fun sendSms(phone: String, message: String): ToolResult {
->>>>>>> 4c5759311cb24f1ac344ead8710b58458a0f5089
         // Permission check handled by caller/activity before invoking this
         return try {
             val smsManager = context.getSystemService(SmsManager::class.java)
@@ -135,13 +90,8 @@ class AndroidToolManager(private val context: Context) {
     }
 
     private fun readFile(path: String): ToolResult {
-<<<<<<< HEAD
-        // Scoped storage access
-        val file = File(context.filesDir, path) // Restricted to app sandbox for safety first
-=======
         // Scoped storage access - restricted to app sandbox for safety
         val file = File(context.filesDir, path)
->>>>>>> 4c5759311cb24f1ac344ead8710b58458a0f5089
         if (!file.exists()) return ToolResult(false, "File not found")
         return ToolResult(true, file.readText())
     }
@@ -164,8 +114,6 @@ class AndroidToolManager(private val context: Context) {
         context.startActivity(intent)
         return ToolResult(true, "Opened URL: $url")
     }
-<<<<<<< HEAD
-=======
 
     private fun remember(content: String): ToolResult {
         return runBlocking {
@@ -209,5 +157,4 @@ class AndroidToolManager(private val context: Context) {
         scope.cancel()
         llmService.close()
     }
->>>>>>> 4c5759311cb24f1ac344ead8710b58458a0f5089
 }

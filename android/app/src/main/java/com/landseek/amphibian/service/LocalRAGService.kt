@@ -90,8 +90,6 @@ class LocalRAGService(private val context: Context) {
         saveMindMap()
     }
 
-<<<<<<< HEAD
-=======
     // --- Sync Methods ---
 
     suspend fun getLatestTimestamp(): Long {
@@ -144,7 +142,6 @@ class LocalRAGService(private val context: Context) {
         return MemoryChunk(id, text, embedding, timestamp)
     }
 
->>>>>>> 4c5759311cb24f1ac344ead8710b58458a0f5089
     // --- Helpers ---
 
     private fun generateEmbedding(text: String): FloatArray {
@@ -173,22 +170,6 @@ class LocalRAGService(private val context: Context) {
     }
 
     private fun saveMemories() {
-<<<<<<< HEAD
-        // Serialize to JSON and write to disk
-        // (Implementation omitted for brevity)
-    }
-    
-    private fun loadMemories() {
-        // Load from JSON
-    }
-    
-    private fun saveMindMap() {
-        // Save Graph
-    }
-    
-    private fun loadMindMap() {
-        // Load Graph
-=======
         try {
             val file = File(context.filesDir, MEMORY_FILE)
             val jsonArray = JSONArray()
@@ -260,6 +241,5 @@ class LocalRAGService(private val context: Context) {
         } catch (e: Exception) {
             Log.e(TAG, "Failed to load mind map", e)
         }
->>>>>>> 4c5759311cb24f1ac344ead8710b58458a0f5089
     }
 }
