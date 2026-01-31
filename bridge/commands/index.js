@@ -575,6 +575,105 @@ class CommandProcessor {
                 message: '🎯 Looking for available tasks...'
             };
         });
+
+        // ============================================
+        // UNIVERSAL DEVICE HOST COMMANDS
+        // ============================================
+
+        // Start device as a universal host
+        this.register('hostdevice', 'Start this device as a universal host for ClawBots', async (args) => {
+            const port = args.length > 0 ? parseInt(args[0]) : 8768;
+            const deviceType = args.length > 1 ? args[1] : 'auto';
+            
+            return {
+                message: `🏠 Starting Universal Host on port ${port}...`,
+                action: 'start_device_host',
+                data: { port, deviceType }
+            };
+        }, '/hostdevice [port] [device_type]');
+
+        // Stop device hosting
+        this.register('stophost', 'Stop hosting ClawBots on this device', async () => {
+            return {
+                message: '🛑 Stopping device host...',
+                action: 'stop_device_host'
+            };
+        });
+
+        // Show host status
+        this.register('hoststatus', 'Show universal host status', async () => {
+            return {
+                action: 'device_host_status',
+                message: null
+            };
+        });
+
+        // Discover other hosts on network
+        this.register('discover', 'Discover other Amphibian hosts on the network', async () => {
+            return {
+                message: '🔍 Scanning for hosts...',
+                action: 'discover_hosts'
+            };
+        });
+
+        // Connect to a discovered host
+        this.register('connecthost', 'Connect to a discovered host', async (args) => {
+            if (args.length === 0) {
+                return { message: 'Usage: /connecthost <host:port> [bot_name]' };
+            }
+            
+            const [host, port] = args[0].includes(':') ? args[0].split(':') : [args[0], '8768'];
+            const botName = args.length > 1 ? args.slice(1).join(' ') : null;
+            
+            return {
+                message: '🔌 Connecting to host...',
+                action: 'connect_to_host',
+                data: { host, port: parseInt(port), botName }
+            };
+        }, '/connecthost <host:port> [bot_name]');
+
+        // Set device type profile
+        this.register('devicetype', 'Set or show device type profile', async (args) => {
+            if (args.length === 0) {
+                return {
+                    action: 'show_device_types',
+                    message: null
+                };
+            }
+            
+            const deviceType = args[0].toLowerCase();
+            
+            return {
+                message: `📱 Setting device type to: ${deviceType}`,
+                action: 'set_device_type',
+                data: { deviceType }
+            };
+        }, '/devicetype [type]');
+
+        // Set power mode
+        this.register('powermode', 'Set device power mode', async (args) => {
+            const validModes = ['performance', 'balanced', 'power_save', 'ultra_low'];
+            
+            if (args.length === 0 || !validModes.includes(args[0].toLowerCase())) {
+                return { message: `Usage: /powermode <${validModes.join('|')}>` };
+            }
+            
+            const mode = args[0].toLowerCase();
+            
+            return {
+                message: `⚡ Setting power mode to: ${mode}`,
+                action: 'set_power_mode',
+                data: { mode }
+            };
+        }, '/powermode <performance|balanced|power_save|ultra_low>');
+
+        // List supported device types
+        this.register('devicetypes', 'List all supported device types', async () => {
+            return {
+                action: 'list_device_types',
+                message: null
+            };
+        });
     }
 
     /**

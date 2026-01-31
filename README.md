@@ -369,6 +369,102 @@ The OpenClaw pool exposes REST endpoints:
 | `GET /tasks` | Available tasks |
 | `GET /leaderboard` | Top contributors |
 
+## 🏠 Universal Device Host
+
+Turn **any device** into a distributed processing host for ClawBots. Supports a wide range of devices:
+
+### Supported Device Types
+
+| Category | Devices |
+|----------|---------|
+| **📱 Smartphones** | Android (Pixel, Samsung, etc.), iOS (iPhone) |
+| **🏠 Smart Home** | Google Home, Amazon Echo, Smart Displays, Smart TVs |
+| **🔌 IoT** | Raspberry Pi, ESP32, Arduino, NVIDIA Jetson, Google Coral |
+| **💻 Desktop** | Windows PC, Mac, Linux workstation |
+| **☁️ Cloud** | AWS, GCP, Azure instances |
+| **🔧 Edge** | Routers, NAS devices, Edge servers |
+
+### Starting a Universal Host
+
+```bash
+# Auto-detect device type
+/hostdevice
+
+# Specify port and device type
+/hostdevice 8768 smartphone_high
+
+# Output:
+🏠 Universal Host started!
+   Name: MyPhone_android
+   Type: High-End Smartphone
+   Port: 8768
+   Capabilities: inference, training, embed
+```
+
+### Device Type Profiles
+
+Each device type has optimized settings:
+
+| Type | Inference | Training | Memory | Concurrent Tasks |
+|------|-----------|----------|--------|------------------|
+| `smartphone_high` | ✅ | ✅ | 4GB | 3 |
+| `smartphone_mid` | ✅ | ❌ | 2GB | 2 |
+| `smart_speaker` | ❌ | ❌ | 256MB | 1 (relay only) |
+| `smart_display` | ✅ | ❌ | 1GB | 2 |
+| `raspberry_pi` | ✅ | ✅ | 4GB | 2 |
+| `jetson_nano` | ✅ | ✅ | 4GB | 4 (CUDA) |
+| `desktop_high` | ✅ | ✅ | 32GB | 8 (GPU) |
+| `server` | ✅ | ✅ | 128GB | 32 |
+
+### Device Host Commands
+
+| Command | Description |
+|---------|-------------|
+| `/hostdevice [port] [type]` | Start as universal host |
+| `/stophost` | Stop hosting |
+| `/hoststatus` | Show host status |
+| `/discover` | Find hosts on network |
+| `/connecthost <host:port>` | Connect to a host |
+| `/devicetype [type]` | Set/show device type |
+| `/powermode <mode>` | Set power mode |
+| `/devicetypes` | List all device types |
+
+### Power Modes
+
+Adapt to power constraints automatically:
+
+| Mode | Description |
+|------|-------------|
+| `performance` | Maximum speed, highest power |
+| `balanced` | Balance speed and power |
+| `power_save` | Minimize power usage |
+| `ultra_low` | For battery-critical situations |
+
+Devices automatically switch to power_save when battery is low.
+
+### Device Discovery
+
+Hosts automatically discover each other on the local network:
+
+```bash
+/discover
+
+# Output:
+🔍 Found 3 hosts:
+  • MyPixel (smartphone_high) - 192.168.1.100:8768
+  • LivingRoomTV (smart_tv) - 192.168.1.101:8768
+  • HomeServer (server) - 192.168.1.102:8768
+```
+
+### Adaptive Task Scheduling
+
+The scheduler intelligently distributes tasks based on:
+- **Capability Match**: Best device for the task type
+- **Load Balance**: Distribute work evenly
+- **Power Aware**: Prefer plugged-in devices
+- **Latency Optimized**: Fastest response time
+- **Cost Optimized**: Minimize resource usage
+
 ### System Requirements (Desktop)
 
 | Platform | Requirements |
