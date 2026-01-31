@@ -90,7 +90,15 @@ class CollectiveCoordinator {
             chunkOverlap: options.chunkOverlap || 2, // Overlap tokens between chunks
             minDevicesForInference: options.minDevicesForInference || 1,
             speculativeExecution: options.speculativeExecution !== false,
-            adaptiveTimeout: options.adaptiveTimeout !== false
+            adaptiveTimeout: options.adaptiveTimeout !== false,
+            // Tunable constants
+            maxConcurrentTasksPerDevice: options.maxConcurrentTasksPerDevice || 3,
+            latencyTimeoutMultiplier: options.latencyTimeoutMultiplier || 3, // Timeout = avg latency * this
+            defaultUnknownLatency: options.defaultUnknownLatency || 5000, // 5s default for new devices
+            maxCompletedTaskCache: options.maxCompletedTaskCache || 100, // LRU cache size
+            heartbeatTimeout: options.heartbeatTimeout || 60000, // 60 seconds
+            heartbeatInterval: options.heartbeatInterval || 30000, // 30 seconds
+            reconnectDelay: options.reconnectDelay || 2000 // Base reconnect delay
         };
         
         // Networking
@@ -469,9 +477,9 @@ class CollectiveCoordinator {
         
         if (count === 0) return this.config.baseTimeout;
         
-        // Use 3x average latency as timeout, capped at max
+        // Use configurable multiplier for average latency as timeout, capped at max
         const avgLatency = totalLatency / count;
-        return Math.min(avgLatency * 3, this.config.maxTimeout);
+        return Math.min(avgLatency * this.config.latencyTimeoutMultiplier, this.config.maxTimeout);
     }
 
     /**
@@ -482,7 +490,7 @@ class CollectiveCoordinator {
         
         // Get all available devices sorted by reliability
         for (const [deviceId, device] of this.devices) {
-            if (device.activeTasks.size < 3) { // Max 3 concurrent tasks per device
+            if (device.activeTasks.size < this.config.maxConcurrentTasksPerDevice) {
                 const reliability = this.deviceReliability.get(deviceId) || 1.0;
                 const avgLatency = this.getAverageLatency(deviceId);
                 
@@ -509,7 +517,7 @@ class CollectiveCoordinator {
      */
     getAverageLatency(deviceId) {
         const history = this.latencyHistory.get(deviceId) || [];
-        if (history.length === 0) return 5000; // Default 5s for unknown
+        if (history.length === 0) return this.config.defaultUnknownLatency;
         return history.reduce((a, b) => a + b, 0) / history.length;
     }
 
@@ -653,9 +661,10 @@ class CollectiveCoordinator {
         // Aggregate results - use the most common result or first
         const result = this.aggregateResults(task.results);
         
-        // Store in completed (LRU)
+        // Store in completed (simple FIFO cache - first key deleted when limit reached)
+        // Note: This is not a true LRU implementation, but sufficient for this use case
         this.completedTasks.set(taskId, result);
-        if (this.completedTasks.size > 100) {
+        if (this.completedTasks.size > this.config.maxCompletedTaskCache) {
             const oldest = this.completedTasks.keys().next().value;
             this.completedTasks.delete(oldest);
         }
@@ -706,14 +715,14 @@ class CollectiveCoordinator {
         setInterval(() => {
             for (const [deviceId, device] of this.devices) {
                 // Check for stale devices
-                if (Date.now() - device.lastHeartbeat > 60000) {
+                if (Date.now() - device.lastHeartbeat > this.config.heartbeatTimeout) {
                     console.log(`⚠️ Device ${device.name} heartbeat timeout`);
                     device.ws.close(4002, 'Heartbeat timeout');
                 } else {
                     device.ws.ping();
                 }
             }
-        }, 30000);
+        }, this.config.heartbeatInterval);
         
         // Process queued tasks periodically
         setInterval(() => {

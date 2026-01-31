@@ -36,7 +36,8 @@ class CollectiveBrain {
             topP: options.topP || 0.9,
             streamResults: options.streamResults !== false,
             retryAttempts: options.retryAttempts || 3,
-            retryDelay: options.retryDelay || 2000
+            retryDelay: options.retryDelay || 2000,
+            maxRetryDelay: options.maxRetryDelay || 10000 // Cap exponential backoff at 10 seconds
         };
         
         // Tracking
@@ -204,8 +205,12 @@ class CollectiveBrain {
                         break;
                     }
                     
-                    // Exponential backoff
-                    await this.delay(this.config.retryDelay * Math.pow(2, retryCount - 1));
+                    // Exponential backoff with maximum cap
+                    const backoffDelay = Math.min(
+                        this.config.retryDelay * Math.pow(2, retryCount - 1),
+                        this.config.maxRetryDelay
+                    );
+                    await this.delay(backoffDelay);
                 }
             }
             
@@ -264,7 +269,12 @@ class CollectiveBrain {
                 
                 if (attempts < this.config.retryAttempts) {
                     console.log(`⚠️ Inference attempt ${attempts} failed, retrying...`);
-                    await this.delay(this.config.retryDelay * Math.pow(2, attempts - 1));
+                    // Exponential backoff with maximum cap
+                    const backoffDelay = Math.min(
+                        this.config.retryDelay * Math.pow(2, attempts - 1),
+                        this.config.maxRetryDelay
+                    );
+                    await this.delay(backoffDelay);
                 }
             }
         }

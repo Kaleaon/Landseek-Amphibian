@@ -29,9 +29,15 @@ class CollectiveClient {
         
         // Reconnection settings
         this.reconnectAttempts = 0;
-        this.maxReconnectAttempts = 5;
+        this.maxReconnectAttempts = options.maxReconnectAttempts || 5;
         this.shouldReconnect = true;
         this.connectionInfo = null;
+        
+        // Connection timing configuration
+        this.config = {
+            baseReconnectDelay: options.baseReconnectDelay || 2000, // 2 seconds base
+            connectionTimeout: options.connectionTimeout || 15000   // 15 seconds timeout
+        };
     }
 
     /**
@@ -77,10 +83,10 @@ class CollectiveClient {
                     this.isConnected = false;
                     this.emit('disconnected', { code, reason: reason.toString() });
                     
-                    // Auto-reconnect
+                    // Auto-reconnect with exponential backoff
                     if (this.shouldReconnect && this.reconnectAttempts < this.maxReconnectAttempts) {
                         this.reconnectAttempts++;
-                        const delay = 2000 * Math.pow(2, this.reconnectAttempts - 1);
+                        const delay = this.config.baseReconnectDelay * Math.pow(2, this.reconnectAttempts - 1);
                         console.log(`🔄 Reconnecting in ${delay}ms (attempt ${this.reconnectAttempts})...`);
                         setTimeout(() => {
                             this.connectDirect(host, port, secret).catch(e => {
@@ -104,7 +110,7 @@ class CollectiveClient {
                         this.ws.close();
                         reject(new Error('Connection timeout'));
                     }
-                }, 15000);
+                }, this.config.connectionTimeout);
 
             } catch (e) {
                 reject(e);
