@@ -882,6 +882,11 @@ export CONTEXT7_API_KEY="your-context7-api-key"
 - [x] **Phase 9: The Embedding** - Android build system with Gradle, Node.js bundling
 - [x] **Phase 10: Release** - Build configuration and scripts ready
 
+### Future Enhancements
+
+- [ ] **ToolNeuron Integration** - Enhanced RAG with real embeddings, TTS, secure storage
+  - See [docs/TOOLNEURON_INTEGRATION.md](./docs/TOOLNEURON_INTEGRATION.md) for details
+
 ## 🔨 Build Instructions
 
 ### Quick Build (One Command)
