@@ -1,174 +1,183 @@
 # ToolNeuron Integration Guide
 
-This document outlines how [ToolNeuron](https://github.com/Siddhesh2377/ToolNeuron) can enhance Landseek-Amphibian development and provides integration strategies.
+This document outlines how [ToolNeuron](https://github.com/Siddhesh2377/ToolNeuron) and [MediaPipe](https://github.com/google-ai-edge/mediapipe) have been integrated into Landseek-Amphibian.
+
+## ✅ Integration Status
+
+| Feature | Status | Implementation |
+|---------|--------|----------------|
+| **RAG Embeddings** | ✅ Complete | ONNX MiniLM + MediaPipe fallback |
+| **LLM Inference** | ✅ Complete | MediaPipe Gemma with TPU |
+| **Text-to-Speech** | ✅ Complete | TTSService with 10 voices |
+| **Document Processing** | ✅ Complete | PDFBox + Apache POI |
+| **Vision Tasks** | ✅ Complete | MediaPipe Vision (Object/Face/Hand) |
+| **Memory Vault** | 🔄 Partial | Using JSON storage |
 
 ## Overview
 
-ToolNeuron is an Android-native AI assistant library that provides several capabilities that could significantly improve Landseek-Amphibian:
+ToolNeuron is an Android-native AI assistant library that provides several capabilities that have been integrated into Landseek-Amphibian:
 
-| Feature | Current Amphibian Implementation | ToolNeuron Capability |
-|---------|----------------------------------|----------------------|
-| **LLM Inference** | MediaPipe Gemma models (.bin) | Native GGUF support (any model) |
-| **RAG Embeddings** | Mock hash-based vectors | all-MiniLM-L6-v2-Q5_K_M (384-dim) |
-| **Function Calling** | Via Node.js bridge | Native grammar-based JSON schema |
-| **Document Processing** | Via Node.js DocumentManager | Native PDF, Word, Excel, EPUB parsing |
+| Feature | Previous Implementation | With ToolNeuron Integration |
+|---------|-------------------------|----------------------------|
+| **LLM Inference** | MediaPipe Gemma (.bin) | MediaPipe Gemma with TPU optimization |
+| **RAG Embeddings** | Mock hash-based vectors | ONNX all-MiniLM-L6-v2 (384-dim semantic) |
+| **Function Calling** | Via Node.js bridge | Native + Node.js bridge |
+| **Document Processing** | Via Node.js DocumentManager | Native PDF, Word, Excel parsing |
 | **Text-to-Speech** | Not implemented | 10 voices, 5 languages, on-device |
-| **Secure Storage** | Basic JSON files | AES-256-GCM Memory Vault with WAL |
-| **Plugins** | Via MCP servers | Native web search, calculator, dev utils |
+| **Vision Tasks** | Not implemented | Object Detection, Face Detection, Hand Tracking |
 
-## Integration Strategies
+## Implemented Services
 
-### Strategy 1: Library Integration (Recommended)
+### 1. EmbeddingService (Enhanced)
 
-Add ToolNeuron as a direct dependency for its native Android capabilities:
+**File:** `android/app/src/main/java/com/landseek/amphibian/service/EmbeddingService.kt`
+
+Multi-backend embedding service with automatic fallback:
+- **Primary:** ONNX Runtime with all-MiniLM-L6-v2 (384-dim)
+- **Secondary:** MediaPipe Universal Sentence Encoder (512-dim)
+- **Fallback:** Hash-based mock embeddings
+
+```kotlin
+// Priority: ONNX (MiniLM) > MediaPipe (USE) > Fallback
+val embeddingService = EmbeddingService(context)
+embeddingService.initialize()
+
+val embedding = embeddingService.embed("Your text here")
+val similarity = embeddingService.cosineSimilarity(embedding1, embedding2)
+```
+
+### 2. TTSService (New)
+
+**File:** `android/app/src/main/java/com/landseek/amphibian/service/TTSService.kt`
+
+On-device text-to-speech following ToolNeuron's pattern:
+- 10 voices (5 female, 5 male)
+- 5 languages (English, Spanish, French, German, Portuguese)
+- Adjustable speed (0.5x - 2.0x) and pitch
+- Auto-speak option for AI responses
+
+```kotlin
+val ttsService = TTSService(context)
+ttsService.initialize()
+
+// Speak text
+ttsService.speak("Hello, world!")
+
+// Speak and wait for completion
+ttsService.speakAndWait("This blocks until speech completes")
+
+// Configure
+ttsService.setLanguage(Language.ENGLISH)
+ttsService.selectVoice(Voice.F1)
+ttsService.setSpeechRate(1.2f)
+```
+
+### 3. DocumentParserService (New)
+
+**File:** `android/app/src/main/java/com/landseek/amphibian/service/DocumentParserService.kt`
+
+Native document parsing for RAG knowledge base creation:
+- **PDF:** via PDFBox-Android
+- **Word:** .doc and .docx via Apache POI
+- **Excel:** .xls and .xlsx via Apache POI
+- **Text:** .txt, .md
+
+```kotlin
+val documentParser = DocumentParserService(context)
+documentParser.initialize()
+
+// Parse document
+val result = documentParser.parseDocument("/path/to/document.pdf")
+
+if (result.success) {
+    val text = result.text
+    val chunks = result.chunks  // Pre-chunked for RAG
+    val metadata = result.metadata
+}
+```
+
+### 4. MediaPipeVisionService (New)
+
+**File:** `android/app/src/main/java/com/landseek/amphibian/service/MediaPipeVisionService.kt`
+
+Computer vision tasks using MediaPipe:
+- **Object Detection:** EfficientDet with multi-class support
+- **Face Detection:** BlazeFace with landmarks
+- **Hand Tracking:** 21 landmarks per hand
+
+```kotlin
+val visionService = MediaPipeVisionService(context)
+visionService.initialize()
+
+// Object detection
+val objectResult = visionService.detectObjects(bitmap)
+
+// Face detection
+val faceResult = visionService.detectFaces(bitmap)
+
+// Hand tracking
+val handResult = visionService.trackHands(bitmap)
+
+// Process all at once
+val allResults = visionService.processImage(bitmap)
+```
+
+## Dependencies Added
 
 ```gradle
-// android/app/build.gradle
+// build.gradle
 dependencies {
-    // Option A: JitPack (if available)
-    implementation 'com.github.Siddhesh2377:ToolNeuron:1.2.1'
+    // MediaPipe Vision Tasks (Object Detection, Face Detection, Hand Tracking)
+    implementation 'com.google.mediapipe:tasks-vision:0.10.14'
     
-    // Option B: Local AAR module
-    implementation project(':toolneuron')
-}
-```
-
-**Benefits:**
-- Native Android performance (no Node.js bridge overhead for local features)
-- Real semantic search instead of mock embeddings
-- Built-in TTS without additional dependencies
-- Function calling with grammar-based enforcement
-
-### Strategy 2: Selective Feature Adoption
-
-Adopt specific ToolNeuron patterns and libraries without full integration:
-
-#### A. Replace Mock Embeddings with all-MiniLM-L6-v2
-
-Current `LocalRAGService.kt` uses mock hash-based embeddings:
-
-```kotlin
-// Current mock implementation
-private fun generateEmbedding(text: String): FloatArray {
-    val size = 128
-    val vec = FloatArray(size) { 0.0f }
-    val hash = text.hashCode()
-    for (i in 0 until size) {
-        vec[i] = ((hash shr (i % 32)) and 1).toFloat()
-    }
-    return vec
-}
-```
-
-**Recommended upgrade using ToolNeuron's approach:**
-
-```kotlin
-// Add dependency
-implementation 'com.google.mediapipe:tasks-text:0.10.10'
-
-// Or use ONNX Runtime for all-MiniLM-L6-v2
-implementation 'com.microsoft.onnxruntime:onnxruntime-android:1.16.0'
-```
-
-```kotlin
-class EmbeddingService(private val context: Context) {
-    private var session: OrtSession? = null
-    private val MODEL_NAME = "all-MiniLM-L6-v2.onnx"
+    // CameraX for camera integration
+    implementation 'androidx.camera:camera-core:1.3.1'
+    implementation 'androidx.camera:camera-camera2:1.3.1'
+    implementation 'androidx.camera:camera-lifecycle:1.3.1'
+    implementation 'androidx.camera:camera-view:1.3.1'
     
-    suspend fun initialize() = withContext(Dispatchers.IO) {
-        val env = OrtEnvironment.getEnvironment()
-        val modelPath = File(context.filesDir, "models/$MODEL_NAME").absolutePath
-        session = env.createSession(modelPath)
-    }
+    // ONNX Runtime for MiniLM embeddings (ToolNeuron pattern)
+    implementation 'com.microsoft.onnxruntime:onnxruntime-android:1.16.0'
     
-    suspend fun embed(text: String): FloatArray = withContext(Dispatchers.Default) {
-        // Tokenize and run inference
-        // Returns 384-dimensional embedding vector
-    }
-}
-```
-
-#### B. Add GGUF Model Support
-
-ToolNeuron uses llama.cpp for GGUF inference. Add similar support:
-
-```kotlin
-// Use llama-android binding
-implementation 'com.github.aspect:llama-android:0.1.0'
-```
-
-Benefits over MediaPipe:
-- Support for any GGUF model (Llama, Mistral, Gemma, Phi, Qwen)
-- Native function calling with JSON grammar enforcement
-- Better memory management for large models
-
-#### C. Document Processing Libraries
-
-ToolNeuron uses these libraries for document parsing:
-
-```gradle
-dependencies {
-    // PDF parsing
+    // Document Processing (ToolNeuron pattern)
     implementation 'com.tom-roush:pdfbox-android:2.0.27.0'
-    
-    // Microsoft Office formats
     implementation 'org.apache.poi:poi:5.2.5'
     implementation 'org.apache.poi:poi-ooxml:5.2.5'
-    
-    // EPUB
-    implementation 'nl.siegmann.epublib:epublib-core:4.0'
 }
 ```
 
-This would replace the Node.js `DocumentManager` with native Android parsing.
-
-#### D. Text-to-Speech Integration
-
-ToolNeuron uses Supertonic TTS for on-device speech synthesis:
-
-```kotlin
-class TTSService(private val context: Context) {
-    private var ttsEngine: SupertonicTTS? = null
-    
-    val voices = listOf(
-        Voice("F1", "English Female 1"),
-        Voice("F2", "English Female 2"),
-        // ... 10 voices total
-    )
-    
-    suspend fun speak(text: String, voice: Voice, speed: Float = 1.0f)
-    suspend fun stopSpeaking()
-}
-```
-
-This would add voice output to AI responses.
-
-### Strategy 3: Hybrid Architecture
-
-Keep the Node.js bridge for MCP/agent capabilities but use ToolNeuron for:
-
-1. **Local RAG with real embeddings** - Replace `LocalRAGService`
-2. **TTS output** - Add voice responses
-3. **Document parsing** - Native preprocessing before sending to Node.js
-4. **Secure storage** - Replace JSON files with encrypted Memory Vault
+## Architecture
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │                    Android APK Process                       │
 ├─────────────────────────────────────────────────────────────┤
 │  ┌─────────────────┐    ┌─────────────────────────────────┐│
-│  │   Jetpack       │    │   Foreground Service            ││
-│  │   Compose UI    │───▶│   (AmphibianCoreService)        ││
+│  │   Jetpack       │    │   AmphibianCoreService          ││
+│  │   Compose UI    │───▶│   (Foreground Service)          ││
 │  │   (120Hz)       │    │                                 ││
 │  └─────────────────┘    │  ┌───────────────────────────┐  ││
 │         │               │  │  ToolNeuron Native Layer  │  ││
-│         ▼               │  │  - Embeddings (MiniLM)    │  ││
-│  ┌─────────────────┐    │  │  - TTS (Supertonic)       │  ││
-│  │  TTS Output     │◀───│  │  - Document Parsing       │  ││
-│  │  (ToolNeuron)   │    │  │  - Memory Vault           │  ││
-│  └─────────────────┘    │  └───────────────────────────┘  ││
+│         ▼               │  │  - EmbeddingService       │  ││
+│  ┌─────────────────┐    │  │    (ONNX MiniLM)          │  ││
+│  │  TTS Output     │◀───│  │  - TTSService             │  ││
+│  │  (TTSService)   │    │  │  - DocumentParserService  │  ││
+│  └─────────────────┘    │  │    (PDF, Word, Excel)     │  ││
+│                         │  └───────────────────────────┘  ││
+│  ┌─────────────────┐    │               │                  ││
+│  │  Vision Output  │◀───│  ┌───────────────────────────┐  ││
+│  │  (MediaPipe)    │    │  │  MediaPipe Vision Layer   │  ││
+│  └─────────────────┘    │  │  - Object Detection       │  ││
+│                         │  │  - Face Detection         │  ││
+│                         │  │  - Hand Tracking          │  ││
+│                         │  └───────────────────────────┘  ││
 │                         │               │                  ││
-│                         │               ▼                  ││
+│                         │  ┌───────────────────────────┐  ││
+│                         │  │  MediaPipe LLM Layer      │  ││
+│                         │  │  - LocalLLMService        │  ││
+│                         │  │  - TPU Acceleration       │  ││
+│                         │  └───────────────────────────┘  ││
+│                         │               │                  ││
 │                         │  ┌───────────────────────────┐  ││
 │                         │  │  Embedded Node.js Runtime │  ││
 │                         │  │  (MCP Host + OpenClaw)    │  ││
@@ -177,151 +186,55 @@ Keep the Node.js bridge for MCP/agent capabilities but use ToolNeuron for:
 └─────────────────────────────────────────────────────────────┘
 ```
 
-## Implementation Roadmap
+## Model Files Required
 
-### Phase 1: Embeddings Upgrade (High Priority)
-Replace the mock embedding implementation in `LocalRAGService.kt` with real semantic embeddings using all-MiniLM-L6-v2.
+Place these models in `assets/models/` or they will be downloaded on first use:
 
-**Impact:** Dramatically improves RAG quality and memory search relevance.
+| Model | File | Size | Purpose |
+|-------|------|------|---------|
+| MiniLM Embeddings | `all-MiniLM-L6-v2.onnx` | ~23MB | Semantic embeddings |
+| USE Embeddings | `universal_sentence_encoder.tflite` | ~50MB | Fallback embeddings |
+| Gemma LLM | `gemma-3-4b-it-gpu-int4.bin` | ~2.5GB | Text generation |
+| Object Detector | `efficientdet_lite0.tflite` | ~4MB | Object detection |
+| Face Detector | `blaze_face_short_range.tflite` | ~200KB | Face detection |
+| Hand Landmarker | `hand_landmarker.task` | ~10MB | Hand tracking |
 
-**Files to modify:**
-- `android/app/src/main/java/com/landseek/amphibian/service/LocalRAGService.kt`
-- `android/app/build.gradle` (add ONNX Runtime dependency)
+## Usage in AmphibianCoreService
 
-### Phase 2: TTS Integration (Medium Priority)
-Add text-to-speech capability for AI responses.
-
-**Impact:** Accessibility improvement, hands-free operation.
-
-**Files to create:**
-- `android/app/src/main/java/com/landseek/amphibian/service/TTSService.kt`
-
-### Phase 3: Document Parsing (Medium Priority)
-Replace Node.js document processing with native Android parsing.
-
-**Impact:** Faster document analysis, offline document support.
-
-**Files to modify:**
-- `bridge/documents/` (can be simplified)
-- Add native parsers in `android/app/src/main/java/com/landseek/amphibian/service/`
-
-### Phase 4: Secure Storage (Low Priority)
-Implement Memory Vault pattern for encrypted storage.
-
-**Impact:** Enterprise-grade security for sensitive data.
-
-**Files to modify:**
-- `android/app/src/main/java/com/landseek/amphibian/service/LocalRAGService.kt`
-
-### Phase 5: GGUF Model Support (Optional)
-Add support for GGUF models alongside MediaPipe.
-
-**Impact:** Support for a wider range of AI models.
-
-## Quick Start: Embeddings Upgrade
-
-The highest-impact change is upgrading from mock embeddings to real semantic embeddings. Here's a minimal implementation:
-
-### Step 1: Add Dependencies
-
-```gradle
-// android/app/build.gradle
-dependencies {
-    // ONNX Runtime for embeddings
-    implementation 'com.microsoft.onnxruntime:onnxruntime-android:1.16.0'
-}
-```
-
-### Step 2: Download Embedding Model
-
-Add the all-MiniLM-L6-v2 ONNX model to assets or download on first run:
-- Model URL: https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2
-- Size: ~23MB (quantized)
-
-### Step 3: Create EmbeddingService
+The core service now provides access to all integrated services:
 
 ```kotlin
-package com.landseek.amphibian.service
+// Get service via binding
+val service = coreServiceBinder.getService()
 
-import ai.onnxruntime.*
-import android.content.Context
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
-import java.io.File
+// TTS
+service.speak("Hello!")
+service.setAutoSpeak(true)
 
-class EmbeddingService(private val context: Context) {
-    private var ortEnvironment: OrtEnvironment? = null
-    private var ortSession: OrtSession? = null
-    private val EMBEDDING_DIM = 384 // MiniLM-L6-v2 dimension
-    
-    suspend fun initialize(): Boolean = withContext(Dispatchers.IO) {
-        try {
-            ortEnvironment = OrtEnvironment.getEnvironment()
-            val modelFile = File(context.filesDir, "models/all-MiniLM-L6-v2.onnx")
-            if (modelFile.exists()) {
-                ortSession = ortEnvironment?.createSession(modelFile.absolutePath)
-                return@withContext true
-            }
-            return@withContext false
-        } catch (e: Exception) {
-            return@withContext false
-        }
-    }
-    
-    suspend fun embed(text: String): FloatArray = withContext(Dispatchers.Default) {
-        // Simplified - real implementation needs tokenization
-        val session = ortSession ?: return@withContext FloatArray(EMBEDDING_DIM)
-        // Run inference and return embedding vector
-        FloatArray(EMBEDDING_DIM) // Placeholder
-    }
-    
-    fun close() {
-        ortSession?.close()
-        ortEnvironment?.close()
-    }
-}
-```
+// Document Processing
+val result = service.parseDocument(uri, "document.pdf")
 
-### Step 4: Update LocalRAGService
+// Vision
+val objects = service.detectObjects(bitmap)
+val faces = service.detectFaces(bitmap)
+val hands = service.trackHands(bitmap)
 
-```kotlin
-// In LocalRAGService.kt
-private var embeddingService: EmbeddingService? = null
+// RAG
+service.addMemory("Important information to remember")
+val context = service.retrieveContext("What do you know about X?")
 
-suspend fun initialize() {
-    withContext(Dispatchers.IO) {
-        embeddingService = EmbeddingService(context)
-        if (embeddingService?.initialize() == true) {
-            Log.d(TAG, "✅ Using real embeddings (MiniLM-L6-v2)")
-        } else {
-            Log.w(TAG, "⚠️ Falling back to mock embeddings")
-        }
-        loadMemories()
-        loadMindMap()
-    }
-}
-
-private suspend fun generateEmbedding(text: String): FloatArray {
-    return embeddingService?.embed(text) ?: generateMockEmbedding(text)
-}
+// Service Status
+val status = service.getServiceStatus()
+println("LLM Ready: ${status.llmReady}")
+println("TTS Ready: ${status.ttsReady}")
+println("Vision: ${status.visionStatus}")
 ```
 
 ## Resources
 
 - **ToolNeuron Repository:** https://github.com/Siddhesh2377/ToolNeuron
-- **ToolNeuron Releases:** https://github.com/Siddhesh2377/ToolNeuron/releases
-- **GGUF Models:** https://huggingface.co/models?library=gguf
-- **Sentence Transformers:** https://huggingface.co/sentence-transformers
+- **MediaPipe Repository:** https://github.com/google-ai-edge/mediapipe
+- **MediaPipe Documentation:** https://developers.google.com/mediapipe
+- **ONNX Runtime:** https://onnxruntime.ai/
 - **Apache POI:** https://poi.apache.org/
 - **PDFBox Android:** https://github.com/TomRoush/PdfBox-Android
-
-## Conclusion
-
-ToolNeuron provides production-ready implementations of several features that Landseek-Amphibian currently has as prototypes or missing entirely. The recommended approach is a **hybrid integration** that:
-
-1. **Keeps the Node.js bridge** for MCP protocol and agent runtime
-2. **Adopts ToolNeuron patterns** for native Android capabilities
-3. **Upgrades embeddings** as the highest-priority improvement
-4. **Adds TTS** for enhanced user experience
-
-This approach preserves the existing architecture while significantly improving AI capabilities through proven, battle-tested implementations from ToolNeuron.

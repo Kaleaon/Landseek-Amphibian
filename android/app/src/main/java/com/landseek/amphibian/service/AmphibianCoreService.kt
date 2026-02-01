@@ -6,6 +6,8 @@ import android.app.NotificationManager
 import android.app.Service
 import android.content.Context
 import android.content.Intent
+import android.graphics.Bitmap
+import android.net.Uri
 import android.os.Binder
 import android.os.Build
 import android.os.IBinder
@@ -22,7 +24,7 @@ import java.util.concurrent.TimeUnit
 import com.landseek.amphibian.tools.AndroidToolManager
 
 /**
- * AmphibianCoreService
+ * AmphibianCoreService (ToolNeuron + MediaPipe Integration)
  *
  * This Foreground Service is responsible for:
  * 1. Extracting the Node.js runtime from assets (if needed).
@@ -30,6 +32,9 @@ import com.landseek.amphibian.tools.AndroidToolManager
  * 3. Maintaining the WebSocket bridge to the local Node server.
  * 4. Handling Android tool callbacks from the Agent.
  * 5. Managing on-device AI via TPU/MediaPipe with Pixel 10 optimization.
+ * 6. Text-to-Speech for voice output (ToolNeuron pattern)
+ * 7. Document parsing for RAG (PDF, Word, Excel)
+ * 8. Vision tasks (Object Detection, Face Detection, Hand Tracking)
  * 
  * TPU Support:
  * - Pixel 10: Tensor G5 with INT4 quantization (Best)
@@ -38,6 +43,9 @@ import com.landseek.amphibian.tools.AndroidToolManager
  * - Pixel 7: Tensor G2 TPU
  * - Pixel 6: Tensor G1 TPU
  * - Other: GPU/CPU fallback
+ * 
+ * @see https://github.com/Siddhesh2377/ToolNeuron
+ * @see https://github.com/google-ai-edge/mediapipe
  */
 class AmphibianCoreService : Service() {
 
@@ -46,10 +54,18 @@ class AmphibianCoreService : Service() {
     private var webSocket: WebSocket? = null
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     
-    // Tool Manager for native Android capabilities
+    // Core Services
     private lateinit var toolManager: AndroidToolManager
     private lateinit var llmService: LocalLLMService
     private lateinit var tpuService: TPUCapabilityService
+    private lateinit var ragService: LocalRAGService
+    
+    // ToolNeuron Integration Services
+    private lateinit var ttsService: TTSService
+    private lateinit var documentParser: DocumentParserService
+    
+    // MediaPipe Integration Services
+    private lateinit var visionService: MediaPipeVisionService
 
     // Event Stream
     private val _messageFlow = MutableSharedFlow<String>(replay = 0)
@@ -81,9 +97,20 @@ class AmphibianCoreService : Service() {
 
     override fun onCreate() {
         super.onCreate()
+        
+        // Initialize core services
         tpuService = TPUCapabilityService(this)
         toolManager = AndroidToolManager(this)
         llmService = LocalLLMService(this)
+        ragService = LocalRAGService(this)
+        
+        // Initialize ToolNeuron integration services
+        ttsService = TTSService(this)
+        documentParser = DocumentParserService(this)
+        
+        // Initialize MediaPipe vision service
+        visionService = MediaPipeVisionService(this)
+        
         createNotificationChannel()
         
         // Log TPU capabilities on startup
@@ -95,7 +122,7 @@ class AmphibianCoreService : Service() {
         Log.d(TAG, "🐸 Amphibian Service Starting...")
         
         // Start as foreground service
-        startForeground(NOTIFICATION_ID, createNotification("Initializing TPU..."))
+        startForeground(NOTIFICATION_ID, createNotification("Initializing..."))
         
         scope.launch {
             try {
@@ -111,31 +138,53 @@ class AmphibianCoreService : Service() {
                 
                 updateNotification("Initializing $backendName...")
                 
-                // Initialize LLM in parallel with runtime setup
+                // Initialize all services in parallel
                 val llmJob = async { llmService.initialize() }
+                val ragJob = async { ragService.initialize() }
+                val ttsJob = async { ttsService.initialize() }
+                val docJob = async { documentParser.initialize() }
+                val visionJob = async { visionService.initialize() }
                 
                 bootstrapRuntime()
                 startNodeProcess()
                 
-                // Wait for LLM init
+                // Wait for all services
                 val llmReady = llmJob.await()
+                val ragReady = ragJob.await()
+                val ttsReady = ttsJob.await()
+                val docReady = docJob.await()
+                val visionReady = visionJob.await()
+                
+                // Log service status
+                val servicesReady = listOf(
+                    "LLM" to llmReady,
+                    "RAG" to ragReady,
+                    "TTS" to ttsReady,
+                    "Documents" to docReady,
+                    "Vision" to visionReady
+                )
+                
+                val readyCount = servicesReady.count { it.second }
+                val totalCount = servicesReady.size
+                
+                Log.i(TAG, """
+                    ╔════════════════════════════════════════════════════════════╗
+                    ║     🦎 Amphibian Core Ready! (ToolNeuron + MediaPipe)      ║
+                    ╠════════════════════════════════════════════════════════════╣
+                    ║ Backend: ${backendName.padEnd(45)}║
+                    ║ Device Tier: ${caps.deviceTier.name.padEnd(41)}║
+                    ║ Services: $readyCount/$totalCount initialized                              ║
+                    ╠════════════════════════════════════════════════════════════╣
+                    ║ LLM: ${if (llmReady) "✅" else "❌"} | RAG: ${if (ragReady) "✅" else "❌"} | TTS: ${if (ttsReady) "✅" else "❌"} | Docs: ${if (docReady) "✅" else "❌"} | Vision: ${if (visionReady) "✅" else "❌"}  ║
+                    ╚════════════════════════════════════════════════════════════╝
+                """.trimIndent())
                 
                 if (llmReady) {
                     val model = llmService.getCurrentModel() ?: "Unknown"
-                    Log.i(TAG, """
-                        ╔════════════════════════════════════════════════════════════╗
-                        ║              🦎 Amphibian Core Ready!                      ║
-                        ╠════════════════════════════════════════════════════════════╣
-                        ║ Backend: ${backendName.padEnd(45)}║
-                        ║ Model: ${model.padEnd(47)}║
-                        ║ Device Tier: ${caps.deviceTier.name.padEnd(41)}║
-                        ╚════════════════════════════════════════════════════════════╝
-                    """.trimIndent())
-                    
                     updateNotification("Ready ($backendName) 🦎")
                 } else {
                     Log.w(TAG, "LLM initialization failed - running without local AI")
-                    updateNotification("Ready (No AI Model) ⚠️")
+                    updateNotification("Ready (Limited) ⚠️")
                 }
                 
                 delay(2000) // Give Node time to start
@@ -449,14 +498,195 @@ class AmphibianCoreService : Service() {
     fun getRecommendedModel(): TPUCapabilityService.RecommendedModel {
         return tpuService.getRecommendedModel()
     }
+    
+    // ===== ToolNeuron Integration: TTS Methods =====
+    
+    /**
+     * Speak text using TTS
+     */
+    fun speak(text: String): String? {
+        return ttsService.speak(text)
+    }
+    
+    /**
+     * Speak text and wait for completion
+     */
+    suspend fun speakAndWait(text: String): Boolean {
+        return ttsService.speakAndWait(text)
+    }
+    
+    /**
+     * Stop TTS
+     */
+    fun stopSpeaking() {
+        ttsService.stop()
+    }
+    
+    /**
+     * Check if TTS is speaking
+     */
+    fun isSpeaking(): Boolean = ttsService.isSpeaking()
+    
+    /**
+     * Get TTS configuration
+     */
+    fun getTTSConfiguration(): TTSService.TTSConfiguration {
+        return ttsService.getConfiguration()
+    }
+    
+    /**
+     * Set TTS speech rate
+     */
+    fun setTTSSpeechRate(rate: Float) {
+        ttsService.setSpeechRate(rate)
+    }
+    
+    /**
+     * Enable/disable auto-speak for AI responses
+     */
+    fun setAutoSpeak(enabled: Boolean) {
+        ttsService.setAutoSpeak(enabled)
+    }
+    
+    // ===== ToolNeuron Integration: Document Processing Methods =====
+    
+    /**
+     * Parse a document for RAG
+     */
+    suspend fun parseDocument(filePath: String): DocumentParserService.ParseResult {
+        return documentParser.parseDocument(filePath)
+    }
+    
+    /**
+     * Parse a document from URI
+     */
+    suspend fun parseDocument(uri: Uri, fileName: String?): DocumentParserService.ParseResult {
+        return documentParser.parseDocument(uri, fileName)
+    }
+    
+    /**
+     * Get supported document extensions
+     */
+    fun getSupportedDocumentExtensions(): List<String> {
+        return documentParser.getSupportedExtensions()
+    }
+    
+    /**
+     * Check if document is supported
+     */
+    fun isDocumentSupported(fileName: String): Boolean {
+        return documentParser.isSupported(fileName)
+    }
+    
+    // ===== MediaPipe Integration: Vision Methods =====
+    
+    /**
+     * Detect objects in a bitmap
+     */
+    suspend fun detectObjects(bitmap: Bitmap): MediaPipeVisionService.VisionResult {
+        return visionService.detectObjects(bitmap)
+    }
+    
+    /**
+     * Detect faces in a bitmap
+     */
+    suspend fun detectFaces(bitmap: Bitmap): MediaPipeVisionService.VisionResult {
+        return visionService.detectFaces(bitmap)
+    }
+    
+    /**
+     * Track hands in a bitmap
+     */
+    suspend fun trackHands(bitmap: Bitmap): MediaPipeVisionService.VisionResult {
+        return visionService.trackHands(bitmap)
+    }
+    
+    /**
+     * Process image with all available vision tasks
+     */
+    suspend fun processImage(bitmap: Bitmap): Map<MediaPipeVisionService.VisionTask, MediaPipeVisionService.VisionResult> {
+        return visionService.processImage(bitmap)
+    }
+    
+    /**
+     * Get vision service status
+     */
+    fun getVisionServiceStatus(): MediaPipeVisionService.VisionServiceStatus {
+        return visionService.getStatus()
+    }
+    
+    // ===== RAG Methods =====
+    
+    /**
+     * Add memory to RAG
+     */
+    suspend fun addMemory(text: String): String {
+        return ragService.addMemory(text)
+    }
+    
+    /**
+     * Retrieve context from RAG
+     */
+    suspend fun retrieveContext(query: String, limit: Int = 3): String {
+        return ragService.retrieveContext(query, limit)
+    }
+    
+    /**
+     * Get RAG metrics
+     */
+    fun getRAGMetrics(): EmbeddingService.EmbeddingMetrics? {
+        return ragService.getEmbeddingMetrics()
+    }
+    
+    /**
+     * Check if using real embeddings
+     */
+    fun isUsingRealEmbeddings(): Boolean {
+        return ragService.isUsingRealEmbeddings()
+    }
+    
+    // ===== Service Status =====
+    
+    /**
+     * Get comprehensive service status
+     */
+    fun getServiceStatus(): ServiceStatus {
+        return ServiceStatus(
+            isConnected = isConnected,
+            llmReady = llmService.isReady(),
+            llmModel = llmService.getCurrentModel(),
+            ttsReady = ttsService.isReady.value,
+            visionStatus = visionService.getStatus(),
+            ragMemoryCount = ragService.getMemoryCount(),
+            ragUsingRealEmbeddings = ragService.isUsingRealEmbeddings(),
+            tpuCapabilities = tpuService.detectCapabilities()
+        )
+    }
+    
+    data class ServiceStatus(
+        val isConnected: Boolean,
+        val llmReady: Boolean,
+        val llmModel: String?,
+        val ttsReady: Boolean,
+        val visionStatus: MediaPipeVisionService.VisionServiceStatus,
+        val ragMemoryCount: Int,
+        val ragUsingRealEmbeddings: Boolean,
+        val tpuCapabilities: TPUCapabilityService.TPUCapabilities
+    )
 
     override fun onDestroy() {
         super.onDestroy()
         scope.cancel()
         nodeProcess?.destroy()
         webSocket?.close(1000, "Service Destroyed")
+        
+        // Close all services
         llmService.close()
+        ragService.close()
+        ttsService.shutdown()
+        visionService.close()
         toolManager.destroy()
+        
         Log.d(TAG, "Amphibian Service Destroyed")
     }
 
