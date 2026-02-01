@@ -115,7 +115,7 @@ dependencies {
     implementation 'com.google.mediapipe:tasks-text:0.10.14'
     
     // Work Manager for background tasks
-    implementation 'androidx.work:work-runtime-ktx:2.9.0'
+    implementation 'androidx.work:work-runtime-ktx:2.11.1'
     
     // DataStore for preferences
     implementation 'androidx.datastore:datastore-preferences:1.0.0'
