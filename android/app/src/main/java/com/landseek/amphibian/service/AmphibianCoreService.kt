@@ -4,6 +4,7 @@ import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.Service
+import android.content.Context
 import android.content.Intent
 import android.os.Binder
 import android.os.Build
@@ -28,7 +29,15 @@ import com.landseek.amphibian.tools.AndroidToolManager
  * 2. Spawning the Node.js process ("The Brain").
  * 3. Maintaining the WebSocket bridge to the local Node server.
  * 4. Handling Android tool callbacks from the Agent.
- * 5. Managing on-device AI via TPU/MediaPipe.
+ * 5. Managing on-device AI via TPU/MediaPipe with Pixel 10 optimization.
+ * 
+ * TPU Support:
+ * - Pixel 10: Tensor G5 with INT4 quantization (Best)
+ * - Pixel 9: Tensor G4 with INT4 quantization
+ * - Pixel 8: Tensor G3 TPU
+ * - Pixel 7: Tensor G2 TPU
+ * - Pixel 6: Tensor G1 TPU
+ * - Other: GPU/CPU fallback
  */
 class AmphibianCoreService : Service() {
 
@@ -40,6 +49,7 @@ class AmphibianCoreService : Service() {
     // Tool Manager for native Android capabilities
     private lateinit var toolManager: AndroidToolManager
     private lateinit var llmService: LocalLLMService
+    private lateinit var tpuService: TPUCapabilityService
 
     // Event Stream
     private val _messageFlow = MutableSharedFlow<String>(replay = 0)
@@ -71,19 +81,36 @@ class AmphibianCoreService : Service() {
 
     override fun onCreate() {
         super.onCreate()
+        tpuService = TPUCapabilityService(this)
         toolManager = AndroidToolManager(this)
         llmService = LocalLLMService(this)
         createNotificationChannel()
+        
+        // Log TPU capabilities on startup
+        val caps = tpuService.detectCapabilities()
+        Log.i(TAG, "🦎 Amphibian Core created with ${caps.recommendedBackend} backend")
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         Log.d(TAG, "🐸 Amphibian Service Starting...")
         
         // Start as foreground service
-        startForeground(NOTIFICATION_ID, createNotification("Initializing..."))
+        startForeground(NOTIFICATION_ID, createNotification("Initializing TPU..."))
         
         scope.launch {
             try {
+                // Get TPU capabilities
+                val caps = tpuService.detectCapabilities()
+                val backendName = when (caps.recommendedBackend) {
+                    TPUCapabilityService.AccelerationBackend.TPU -> 
+                        "Tensor G${caps.tensorGeneration} TPU"
+                    TPUCapabilityService.AccelerationBackend.GPU -> "GPU"
+                    TPUCapabilityService.AccelerationBackend.NNAPI -> "NNAPI"
+                    TPUCapabilityService.AccelerationBackend.CPU -> "CPU"
+                }
+                
+                updateNotification("Initializing $backendName...")
+                
                 // Initialize LLM in parallel with runtime setup
                 val llmJob = async { llmService.initialize() }
                 
@@ -92,12 +119,28 @@ class AmphibianCoreService : Service() {
                 
                 // Wait for LLM init
                 val llmReady = llmJob.await()
-                Log.d(TAG, "Local LLM ready: $llmReady")
+                
+                if (llmReady) {
+                    val model = llmService.getCurrentModel() ?: "Unknown"
+                    Log.i(TAG, """
+                        ╔════════════════════════════════════════════════════════════╗
+                        ║              🦎 Amphibian Core Ready!                      ║
+                        ╠════════════════════════════════════════════════════════════╣
+                        ║ Backend: ${backendName.padEnd(45)}║
+                        ║ Model: ${model.padEnd(47)}║
+                        ║ Device Tier: ${caps.deviceTier.name.padEnd(41)}║
+                        ╚════════════════════════════════════════════════════════════╝
+                    """.trimIndent())
+                    
+                    updateNotification("Ready ($backendName) 🦎")
+                } else {
+                    Log.w(TAG, "LLM initialization failed - running without local AI")
+                    updateNotification("Ready (No AI Model) ⚠️")
+                }
                 
                 delay(2000) // Give Node time to start
                 connectBridge()
                 
-                updateNotification("Agent Ready 🦎")
             } catch (e: Exception) {
                 Log.e(TAG, "Service startup failed", e)
                 updateNotification("Error: ${e.message}")
@@ -380,6 +423,32 @@ class AmphibianCoreService : Service() {
      * Check if local LLM is ready
      */
     fun isLocalLLMReady(): Boolean = llmService.isReady()
+    
+    /**
+     * Get TPU capabilities
+     */
+    fun getTPUCapabilities(): TPUCapabilityService.TPUCapabilities {
+        return tpuService.detectCapabilities()
+    }
+    
+    /**
+     * Get LLM performance metrics
+     */
+    fun getLLMPerformanceMetrics(): LocalLLMService.PerformanceMetrics {
+        return llmService.getPerformanceMetrics()
+    }
+    
+    /**
+     * Get current model name
+     */
+    fun getCurrentModel(): String? = llmService.getCurrentModel()
+    
+    /**
+     * Get recommended model for this device
+     */
+    fun getRecommendedModel(): TPUCapabilityService.RecommendedModel {
+        return tpuService.getRecommendedModel()
+    }
 
     override fun onDestroy() {
         super.onDestroy()

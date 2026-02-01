@@ -156,5 +156,6 @@ class AndroidToolManager(private val context: Context) {
     fun destroy() {
         scope.cancel()
         llmService.close()
+        ragService.close()
     }
 }

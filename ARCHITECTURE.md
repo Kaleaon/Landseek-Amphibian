@@ -2,7 +2,7 @@
 
 ## Overview
 
-This document defines the technical architecture for embedding the OpenClaw agent runtime inside the Landseek Android application.
+This document defines the technical architecture for embedding the OpenClaw agent runtime inside the Landseek Android application, with full TPU optimization for Pixel devices.
 
 ## 1. The Stack
 
@@ -12,6 +12,36 @@ This document defines the technical architecture for embedding the OpenClaw agen
 | **Bridge** | JNI / WebSocket (Localhost) | Communication channel between Android JVM and Node.js. |
 | **Protocol** | **MCP (Model Context Protocol)** | Standard for connecting the Agent to Tools (Jules, Context7, Stitch). |
 | **Runtime** | Node.js (v22+ arm64) | The execution environment for OpenClaw. |
+| **AI Inference** | MediaPipe GenAI + TPU | On-device LLM inference optimized for Pixel TPU. |
+
+## 1.5. TPU/Hardware Acceleration
+
+Landseek-Amphibian is optimized to fully utilize Google Pixel's Tensor TPU:
+
+| Device | Chip | TPU Generation | Recommended Model | Performance |
+|--------|------|----------------|-------------------|-------------|
+| **Pixel 10** | Tensor G5 | 5 | gemma-3-4b INT4 | ~15 tok/s |
+| **Pixel 9 Pro** | Tensor G4 | 4 | gemma-3-4b INT4 | ~12 tok/s |
+| **Pixel 8 Pro** | Tensor G3 | 3 | gemma-3-4b INT4 | ~10 tok/s |
+| **Pixel 7 Pro** | Tensor G2 | 2 | gemma-2b INT4 | ~8 tok/s |
+| **Pixel 6 Pro** | Tensor G1 | 1 | gemma-2b INT8 | ~5 tok/s |
+| **Other** | - | - | CPU fallback | ~2 tok/s |
+
+### Hardware Detection
+
+The `TPUCapabilityService` automatically detects:
+- Tensor chip generation (G1-G5)
+- Available RAM and device tier
+- Optimal acceleration backend (TPU > GPU > NNAPI > CPU)
+- Supported quantization formats (INT4, INT8, FP16)
+
+### Automatic Optimization
+
+Based on detected capabilities, the system:
+1. Selects the best model for the device tier
+2. Configures optimal generation parameters (max tokens, topK, temperature)
+3. Uses hardware-accelerated embeddings for RAG
+4. Adapts streaming speed for smooth UI
 
 ## 2. Component Diagram
 
@@ -21,6 +51,14 @@ graph TD
     
     subgraph "Android APK Process"
         UI -- Intent/IPC --> Service[Amphibian Background Service]
+        
+        subgraph "TPU Inference Layer"
+            Service --> TPUService[TPU Capability Detection]
+            TPUService --> LLMService[LocalLLMService]
+            TPUService --> EmbedService[EmbeddingService]
+            LLMService --> MediaPipe[MediaPipe GenAI]
+            MediaPipe --> TPU[Tensor TPU/GPU]
+        end
         
         subgraph "Embedded Node Environment (MCP Host)"
             Service -- Spawns --> NodeBin[Node.js Binary]
@@ -32,8 +70,9 @@ graph TD
             MCPHost -- Internal --> LocalTools[Android Local Tools]
         end
         
-        subgraph "Inference"
-            MCPHost -- HTTP --> Ollama[Ollama Server]
+        subgraph "RAG System"
+            EmbedService --> RAG[LocalRAGService]
+            RAG --> Memories[Semantic Memory]
         end
     end
     

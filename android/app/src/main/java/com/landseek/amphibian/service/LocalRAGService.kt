@@ -2,8 +2,6 @@ package com.landseek.amphibian.service
 
 import android.content.Context
 import android.util.Log
-import com.google.mediapipe.tasks.genai.llminference.LlmInference
-// In real impl: import com.google.mediapipe.tasks.text.textembedder.TextEmbedder
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
@@ -15,15 +13,23 @@ import kotlin.math.sqrt
  * LocalRAGService
  * 
  * Provides Retrieval Augmented Generation capabilities locally.
- * - Stores memories as text chunks with embeddings.
- * - Performs semantic search (cosine similarity).
- * - Manages "Mind Maps" (graph connections between memories).
+ * Now with TPU-accelerated embeddings via EmbeddingService!
+ * 
+ * Features:
+ * - TPU-accelerated semantic embeddings (on Pixel devices)
+ * - Cosine similarity search
+ * - Mind Map graph connections between memories
+ * - Automatic fallback to mock embeddings if model unavailable
  */
 class LocalRAGService(private val context: Context) {
 
     private val TAG = "AmphibianRAG"
     private val MEMORY_FILE = "rag_memory.json"
     private val MIND_MAP_FILE = "rag_graph.json"
+    
+    // TPU-accelerated embedding service
+    private var embeddingService: EmbeddingService? = null
+    private var useRealEmbeddings = false
 
     data class MemoryChunk(val id: String, val text: String, val embedding: FloatArray, val timestamp: Long)
     data class GraphNode(val id: String, val connections: MutableList<String>)
@@ -31,15 +37,22 @@ class LocalRAGService(private val context: Context) {
     private val memories = mutableListOf<MemoryChunk>()
     private val mindMap = mutableMapOf<String, GraphNode>()
 
-    // Placeholder for actual Embedding Model
-    // private var embedder: TextEmbedder? = null
-
     suspend fun initialize() {
         withContext(Dispatchers.IO) {
-            Log.d(TAG, "Initializing Local RAG...")
+            Log.d(TAG, "Initializing Local RAG with TPU support...")
+            
+            // Initialize embedding service
+            embeddingService = EmbeddingService(context)
+            useRealEmbeddings = embeddingService?.initialize() == true
+            
+            if (useRealEmbeddings) {
+                Log.i(TAG, "✅ Using TPU-accelerated embeddings!")
+            } else {
+                Log.w(TAG, "⚠️ Using fallback mock embeddings")
+            }
+            
             loadMemories()
             loadMindMap()
-            // embedder = TextEmbedder.createFromFile(context, "mobilebert_embedding.tflite")
         }
     }
 
@@ -53,11 +66,12 @@ class LocalRAGService(private val context: Context) {
             
             // Auto-link to related concepts (Simple Mind Map Logic)
             val related = search(text, limit = 1)
-            if (related.isNotEmpty()) {
+            if (related.isNotEmpty() && related[0].second > 0.5f) {  // Only link if reasonably similar
                 linkNodes(id, related[0].first.id)
             }
             
             saveMemories()
+            Log.d(TAG, "Added memory: ${text.take(50)}... (similarity threshold: 0.5)")
             return@withContext id
         }
     }
@@ -75,7 +89,7 @@ class LocalRAGService(private val context: Context) {
         }
     }
 
-    private fun search(query: String, limit: Int): List<Pair<MemoryChunk, Float>> {
+    private suspend fun search(query: String, limit: Int): List<Pair<MemoryChunk, Float>> {
         val queryVec = generateEmbedding(query)
         
         return memories.map { mem ->
@@ -144,20 +158,54 @@ class LocalRAGService(private val context: Context) {
 
     // --- Helpers ---
 
-    private fun generateEmbedding(text: String): FloatArray {
-        // MOCK: Generate a fake embedding vector for prototype
-        // In prod: return embedder.embed(text).floatEmbedding
-        val size = 128
+    private suspend fun generateEmbedding(text: String): FloatArray {
+        // Use TPU-accelerated embeddings if available
+        return embeddingService?.embed(text) ?: generateFallbackEmbedding(text)
+    }
+    
+    /**
+     * Fallback embedding generation when EmbeddingService is unavailable
+     */
+    private fun generateFallbackEmbedding(text: String): FloatArray {
+        val size = 384  // Match embedding service dimension
         val vec = FloatArray(size) { 0.0f }
-        // Simple hash-based mock to make "similar" strings have somewhat similar vectors
-        val hash = text.hashCode()
-        for (i in 0 until size) {
-            vec[i] = ((hash shr (i % 32)) and 1).toFloat()
+        
+        // More sophisticated hash-based approach
+        val words = text.lowercase().split("\\s+".toRegex())
+        
+        for ((wordIdx, word) in words.withIndex()) {
+            val hash = word.hashCode()
+            
+            for (i in vec.indices) {
+                val bit = (hash shr (i % 32)) and 1
+                val sign = if ((hash shr ((i + wordIdx) % 32)) and 1 == 1) 1f else -1f
+                vec[i] += bit.toFloat() * sign * (1f / (wordIdx + 1))
+            }
         }
+        
+        // Normalize
+        val norm = sqrt(vec.sumOf { (it * it).toDouble() }).toFloat()
+        if (norm > 0) {
+            for (i in vec.indices) {
+                vec[i] /= norm
+            }
+        }
+        
         return vec
     }
 
     private fun cosineSimilarity(v1: FloatArray, v2: FloatArray): Float {
+        // Use embedding service's cosine similarity if available
+        embeddingService?.let { 
+            return it.cosineSimilarity(v1, v2)
+        }
+        
+        // Fallback calculation
+        if (v1.size != v2.size) {
+            Log.w(TAG, "Embedding dimension mismatch: ${v1.size} vs ${v2.size}")
+            return 0f
+        }
+        
         var dot = 0.0f
         var normA = 0.0f
         var normB = 0.0f
@@ -241,5 +289,36 @@ class LocalRAGService(private val context: Context) {
         } catch (e: Exception) {
             Log.e(TAG, "Failed to load mind map", e)
         }
+    }
+    
+    /**
+     * Check if using real TPU-accelerated embeddings
+     */
+    fun isUsingRealEmbeddings(): Boolean = useRealEmbeddings
+    
+    /**
+     * Get embedding metrics
+     */
+    fun getEmbeddingMetrics(): EmbeddingService.EmbeddingMetrics? {
+        return embeddingService?.getMetrics()
+    }
+    
+    /**
+     * Get total memory count
+     */
+    fun getMemoryCount(): Int = memories.size
+    
+    /**
+     * Get mind map node count
+     */
+    fun getMindMapNodeCount(): Int = mindMap.size
+    
+    /**
+     * Close and release resources
+     */
+    fun close() {
+        embeddingService?.close()
+        embeddingService = null
+        Log.d(TAG, "RAG service closed")
     }
 }

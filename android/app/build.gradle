@@ -108,7 +108,11 @@ dependencies {
     implementation 'com.google.code.gson:gson:2.10.1'
     
     // MediaPipe for on-device LLM inference (TPU/GPU)
-    implementation 'com.google.mediapipe:tasks-genai:0.10.10'
+    // Version 0.10.14+ includes improved Pixel TPU support
+    implementation 'com.google.mediapipe:tasks-genai:0.10.14'
+    
+    // MediaPipe Text Embedder for RAG (TPU accelerated)
+    implementation 'com.google.mediapipe:tasks-text:0.10.14'
     
     // Work Manager for background tasks
     implementation 'androidx.work:work-runtime-ktx:2.9.0'
