@@ -16,7 +16,10 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import com.landseek.amphibian.service.LocalLLMService
 import com.landseek.amphibian.service.LocalRAGService
+import com.landseek.amphibian.service.ModelSetManager
+import com.landseek.amphibian.service.OptimizedModelSets
 import com.landseek.amphibian.service.P2PSyncService
+import org.json.JSONArray
 
 /**
  * AndroidToolManager
@@ -24,7 +27,12 @@ import com.landseek.amphibian.service.P2PSyncService
  * Exposes Android system capabilities as executable tools for the Agent.
  * Handles permission checks and native API calls.
  */
-class AndroidToolManager(private val context: Context) {
+class AndroidToolManager(
+    private val context: Context,
+    private val llmService: LocalLLMService,
+    private val ragService: LocalRAGService,
+    private val modelSetManager: ModelSetManager
+) {
 
     private val TAG = "AmphibianTools"
     
@@ -33,14 +41,11 @@ class AndroidToolManager(private val context: Context) {
 
     data class ToolResult(val success: Boolean, val output: String)
 
-    private val llmService = LocalLLMService(context)
-    private val ragService = LocalRAGService(context)
     private val syncService = P2PSyncService(context, ragService)
     
     init {
         scope.launch { 
-            ragService.initialize() 
-            llmService.initialize()
+            // Services are initialized by AmphibianCoreService
             syncService.startServer() // Start listening for peers
         }
     }
@@ -58,6 +63,9 @@ class AndroidToolManager(private val context: Context) {
                 "recall" -> recall(args.getString("query"))
                 "inference" -> runInference(args.getString("prompt"))
                 "sync_peer" -> syncPeer(args.getString("ip"))
+                "list_models" -> listModels()
+                "load_model" -> loadModel(args.getString("model"))
+                "rescan_models" -> rescanModels()
                 else -> ToolResult(false, "Unknown tool: $name")
             }
         } catch (e: Exception) {
@@ -150,12 +158,46 @@ class AndroidToolManager(private val context: Context) {
         return ToolResult(true, response)
     }
     
+    private fun listModels(): ToolResult {
+        val status = modelSetManager.getStatus()
+        val json = JSONObject()
+        json.put("current_model", status.currentModelSet)
+        json.put("available_models", JSONArray(status.availableModels))
+        json.put("loaded_models", JSONArray(status.loadedModels))
+        return ToolResult(true, json.toString())
+    }
+
+    private fun loadModel(modelName: String): ToolResult {
+        val modelFile = File(context.filesDir, "models/$modelName")
+        val size = if (modelFile.exists()) modelFile.length() else 0L
+
+        val config = OptimizedModelSets.ModelConfig(
+            name = modelName,
+            filename = modelName,
+            description = "Manually loaded",
+            sizeBytes = size,
+            priority = 0,
+            quantization = "unknown"
+        )
+
+        val result = runBlocking { modelSetManager.loadModel(config) }
+        return when (result) {
+            is ModelSetManager.LoadResult.Success -> ToolResult(true, "Loaded ${result.modelName}")
+            is ModelSetManager.LoadResult.Error -> ToolResult(false, result.error)
+            is ModelSetManager.LoadResult.NotFound -> ToolResult(false, "Model not found. Download from: ${result.downloadUrl}")
+        }
+    }
+
+    private fun rescanModels(): ToolResult {
+        modelSetManager.scanAvailableModels()
+        return ToolResult(true, "Models rescanned")
+    }
+
     /**
      * Cleanup resources when manager is destroyed
      */
     fun destroy() {
         scope.cancel()
-        llmService.close()
-        ragService.close()
+        // Services are closed by AmphibianCoreService
     }
 }

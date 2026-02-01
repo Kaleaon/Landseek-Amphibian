@@ -1,0 +1,29 @@
+[
+  {
+    "id": "gemma-2b-it-gpu-int4",
+    "name": "Gemma 2B IT (GPU INT4)",
+    "filename": "gemma-2b-it-gpu-int4.bin",
+    "description": "Standard 2B model optimized for mobile GPUs.",
+    "size": 1640000000,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "url": "https://huggingface.co/google/gemma-2b-it/resolve/main/gemma-2b-it-gpu-int4.bin"
+  },
+  {
+    "id": "gemma-2b-it-cpu-int8",
+    "name": "Gemma 2B IT (CPU INT8)",
+    "filename": "gemma-2b-it-cpu-int8.bin",
+    "description": "CPU compatible 2B model.",
+    "size": 2600000000,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "url": "https://huggingface.co/google/gemma-2b-it/resolve/main/gemma-2b-it-cpu-int8.bin"
+  },
+  {
+    "id": "gemma-3-4b-it-gpu-int4",
+    "name": "Gemma 3 4B IT (GPU INT4)",
+    "filename": "gemma-3-4b-it-gpu-int4.bin",
+    "description": "Powerful 4B model for high-end devices.",
+    "size": 3800000000,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "url": "https://huggingface.co/google/gemma-3-4b-it/resolve/main/gemma-3-4b-it-gpu-int4.bin"
+  }
+]

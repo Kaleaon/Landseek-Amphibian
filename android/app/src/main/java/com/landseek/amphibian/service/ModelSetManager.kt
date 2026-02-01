@@ -25,13 +25,15 @@ import java.io.File
  * @see OptimizedModelSets
  * @see https://github.com/Siddhesh2377/ToolNeuron
  */
-class ModelSetManager(private val context: Context) {
+class ModelSetManager(
+    private val context: Context,
+    private val llmService: LocalLLMService
+) {
 
     private val TAG = "AmphibianModelSetMgr"
     
     // Services
     private val tpuService = TPUCapabilityService(context)
-    private var llmService: LocalLLMService? = null
     private var embeddingService: EmbeddingService? = null
     
     // State
@@ -97,7 +99,6 @@ class ModelSetManager(private val context: Context) {
             _currentModelSet.value = recommendedSet
             
             // Initialize services
-            llmService = LocalLLMService(context)
             embeddingService = EmbeddingService(context)
             
             _isInitialized.value = true
@@ -123,7 +124,7 @@ class ModelSetManager(private val context: Context) {
     /**
      * Scan for available models on device
      */
-    private fun scanAvailableModels() {
+    fun scanAvailableModels() {
         val modelsDir = File(context.filesDir, "models")
         if (!modelsDir.exists()) {
             modelsDir.mkdirs()
@@ -202,8 +203,7 @@ class ModelSetManager(private val context: Context) {
             val startTime = System.currentTimeMillis()
             
             // Initialize LLM with this model
-            val llm = llmService ?: LocalLLMService(context).also { llmService = it }
-            val success = llm.initialize()
+            val success = llmService.initialize()
             
             val loadTime = System.currentTimeMillis() - startTime
             
@@ -347,7 +347,7 @@ class ModelSetManager(private val context: Context) {
      */
     fun close() {
         scope.cancel()
-        llmService?.close()
+        // llmService is managed by AmphibianCoreService
         embeddingService?.close()
         _isInitialized.value = false
         Log.d(TAG, "ModelSetManager closed")

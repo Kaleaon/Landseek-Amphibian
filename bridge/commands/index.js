@@ -397,6 +397,38 @@ class CommandProcessor {
             };
         }, '/recall <query>');
 
+        // List models
+        this.register('models', 'List available AI models', async () => {
+            return {
+                message: '📋 Fetching model list...',
+                action: 'list_models'
+            };
+        });
+
+        // Download model
+        this.register('download', 'Download an AI model', async (args) => {
+            if (args.length === 0) {
+                return { message: 'Usage: /download <model_id>' };
+            }
+            return {
+                message: null,
+                action: 'download_model',
+                data: { modelId: args[0] }
+            };
+        }, '/download <model_id>');
+
+        // Switch model
+        this.register('switch', 'Switch active AI model', async (args) => {
+             if (args.length === 0) {
+                return { message: 'Usage: /switch <model_filename>' };
+            }
+            return {
+                message: null,
+                action: 'switch_model',
+                data: { modelName: args[0] }
+            };
+        }, '/switch <model_filename>');
+
         // Supported formats
         this.register('formats', 'List supported file formats', async () => {
             if (!this.documents) {
