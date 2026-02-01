@@ -4,8 +4,11 @@
  * Provides discovery, installation, and management of MCP server extensions.
  * Allows the Amphibian AI assistant to be extended with community-built tools.
  * 
+ * Catalog Source: Moltbook Extensions Catalog
+ * https://github.com/terminalcraft/moltbook-mcp
+ * 
  * Features:
- * - Browse and search extensions
+ * - Browse and search extensions from moltbook catalog
  * - Install/uninstall extensions
  * - Version management and updates
  * - Security verification
@@ -25,6 +28,9 @@ const ExtensionType = {
     INTEGRATION: 'integration',      // External service integration
     THEME: 'theme'                   // UI theme (for future use)
 };
+
+// Moltbook catalog URL
+const MOLTBOOK_CATALOG_URL = 'https://raw.githubusercontent.com/terminalcraft/moltbook-mcp/main/services.json';
 
 // Extension status
 const ExtensionStatus = {
@@ -113,9 +119,10 @@ class InstalledExtension {
  */
 class ExtensionMarketplace {
     constructor(options = {}) {
-        this.catalogUrl = options.catalogUrl || 'https://raw.githubusercontent.com/Landseek/extension-catalog/main/catalog.json';
+        this.catalogUrl = options.catalogUrl || MOLTBOOK_CATALOG_URL;
         this.extensionsDir = options.extensionsDir || './extensions';
         this.configFile = options.configFile || './extensions/installed.json';
+        this.catalogCacheFile = options.catalogCacheFile || './extensions/catalog_cache.json';
         
         // State
         this.catalog = [];
@@ -155,20 +162,140 @@ class ExtensionMarketplace {
     }
     
     /**
-     * Refresh the extension catalog
+     * Refresh the extension catalog from moltbook
      */
     async refreshCatalog() {
         try {
-            // In production, this would fetch from the catalog URL
-            // For now, use a local/mock catalog
-            const mockCatalog = this.getMockCatalog();
-            this.catalog = mockCatalog.map(ext => new ExtensionInfo(ext));
+            // Try to fetch from moltbook catalog
+            const catalogData = await this.fetchMoltbookCatalog();
+            
+            if (catalogData && catalogData.services) {
+                // Transform moltbook services to extension format
+                this.catalog = this.transformMoltbookServices(catalogData.services);
+                
+                // Cache the catalog for offline use
+                await this.cacheCatalog(catalogData);
+                
+                console.log(`📦 Loaded ${this.catalog.length} extensions from Moltbook catalog`);
+            } else {
+                // Try to load from cache if fetch failed
+                await this.loadCachedCatalog();
+            }
             
             this.emit('catalog_updated', { count: this.catalog.length });
             return this.catalog;
         } catch (error) {
             console.error('Failed to refresh catalog:', error.message);
-            return [];
+            // Try to load from cache
+            await this.loadCachedCatalog();
+            return this.catalog;
+        }
+    }
+    
+    /**
+     * Fetch catalog from moltbook GitHub
+     */
+    async fetchMoltbookCatalog() {
+        try {
+            // Use dynamic import for node-fetch compatibility
+            const response = await fetch(this.catalogUrl);
+            
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
+            
+            const data = await response.json();
+            return data;
+        } catch (error) {
+            console.warn('Failed to fetch moltbook catalog:', error.message);
+            return null;
+        }
+    }
+    
+    /**
+     * Transform moltbook services to extension format
+     */
+    transformMoltbookServices(services) {
+        return services
+            .filter(service => service.status === 'active' || service.status === 'integrated')
+            .map(service => new ExtensionInfo({
+                id: service.id,
+                name: service.name,
+                description: service.notes || `${service.name} - ${service.category || 'general'} service`,
+                version: '1.0.0',
+                author: 'Moltbook Community',
+                type: this.mapCategoryToType(service.category),
+                category: service.category || 'general',
+                tags: service.tags || [],
+                downloadUrl: service.url,
+                sha256: '',
+                dependencies: [],
+                permissions: this.inferPermissions(service),
+                rating: service.status === 'integrated' ? 4.5 : 4.0,
+                downloads: service.status === 'integrated' ? 1000 : 500,
+                verified: service.status === 'integrated',
+                homepage: service.url,
+                repository: service.api_docs || ''
+            }));
+    }
+    
+    /**
+     * Map moltbook category to extension type
+     */
+    mapCategoryToType(category) {
+        const typeMap = {
+            'communication': ExtensionType.MCP_SERVER,
+            'social': ExtensionType.INTEGRATION,
+            'memory': ExtensionType.MCP_SERVER,
+            'tools': ExtensionType.MCP_SERVER,
+            'unknown': ExtensionType.MCP_SERVER
+        };
+        return typeMap[category] || ExtensionType.MCP_SERVER;
+    }
+    
+    /**
+     * Infer permissions from service
+     */
+    inferPermissions(service) {
+        const permissions = [];
+        if (service.category === 'communication') permissions.push('network');
+        if (service.category === 'memory') permissions.push('storage');
+        if (service.category === 'social') permissions.push('network', 'identity');
+        return permissions;
+    }
+    
+    /**
+     * Cache catalog to disk for offline use
+     */
+    async cacheCatalog(catalogData) {
+        try {
+            await fs.writeFile(
+                this.catalogCacheFile, 
+                JSON.stringify(catalogData, null, 2)
+            );
+        } catch (error) {
+            console.warn('Failed to cache catalog:', error.message);
+        }
+    }
+    
+    /**
+     * Load catalog from cache
+     */
+    async loadCachedCatalog() {
+        try {
+            const data = await fs.readFile(this.catalogCacheFile, 'utf-8');
+            const catalogData = JSON.parse(data);
+            
+            if (catalogData && catalogData.services) {
+                this.catalog = this.transformMoltbookServices(catalogData.services);
+                console.log(`📦 Loaded ${this.catalog.length} extensions from cached catalog`);
+            }
+        } catch (error) {
+            if (error.code !== 'ENOENT') {
+                console.warn('Failed to load cached catalog:', error.message);
+            }
+            // No cache available, catalog remains empty
+            this.catalog = [];
         }
     }
     
@@ -635,150 +762,6 @@ module.exports = class ${extension.id.replace(/-/g, '_')} {
         const handlers = this.eventHandlers.get(event) || [];
         handlers.forEach(handler => handler(data));
     }
-    
-    /**
-     * Mock catalog for development/testing
-     */
-    getMockCatalog() {
-        return [
-            {
-                id: 'weather-tools',
-                name: 'Weather Tools',
-                description: 'Get weather forecasts and conditions for any location',
-                version: '1.2.0',
-                author: 'Amphibian Community',
-                type: ExtensionType.MCP_SERVER,
-                category: 'utilities',
-                tags: ['weather', 'forecast', 'location'],
-                downloadUrl: 'https://example.com/extensions/weather-tools.zip',
-                sha256: 'abc123',
-                dependencies: [],
-                permissions: ['location'],
-                rating: 4.5,
-                downloads: 1250,
-                verified: true
-            },
-            {
-                id: 'smart-home',
-                name: 'Smart Home Control',
-                description: 'Control smart home devices like lights, thermostats, and locks',
-                version: '2.0.1',
-                author: 'HomeAutomation Dev',
-                type: ExtensionType.MCP_SERVER,
-                category: 'home',
-                tags: ['smart home', 'iot', 'automation', 'lights', 'thermostat'],
-                downloadUrl: 'https://example.com/extensions/smart-home.zip',
-                sha256: 'def456',
-                dependencies: [],
-                permissions: ['network'],
-                rating: 4.8,
-                downloads: 3420,
-                verified: true
-            },
-            {
-                id: 'code-assistant',
-                name: 'Code Assistant Pro',
-                description: 'Enhanced coding capabilities with multiple language support',
-                version: '1.5.0',
-                author: 'DevTools Inc',
-                type: ExtensionType.SKILL,
-                category: 'development',
-                tags: ['code', 'programming', 'developer', 'python', 'javascript'],
-                downloadUrl: 'https://example.com/extensions/code-assistant.zip',
-                sha256: 'ghi789',
-                dependencies: [],
-                permissions: [],
-                rating: 4.7,
-                downloads: 5680,
-                verified: true
-            },
-            {
-                id: 'todo-manager',
-                name: 'Todo Manager',
-                description: 'Manage tasks, to-do lists, and reminders',
-                version: '1.1.0',
-                author: 'Productivity Labs',
-                type: ExtensionType.MCP_SERVER,
-                category: 'productivity',
-                tags: ['todo', 'tasks', 'reminders', 'productivity'],
-                downloadUrl: 'https://example.com/extensions/todo-manager.zip',
-                sha256: 'jkl012',
-                dependencies: [],
-                permissions: ['notifications'],
-                rating: 4.3,
-                downloads: 890,
-                verified: false
-            },
-            {
-                id: 'personality-casual',
-                name: 'Casual Charlie',
-                description: 'A laid-back, friendly personality for casual conversations',
-                version: '1.0.0',
-                author: 'Amphibian Community',
-                type: ExtensionType.PERSONALITY,
-                category: 'personalities',
-                tags: ['personality', 'casual', 'friendly'],
-                downloadUrl: 'https://example.com/extensions/personality-casual.zip',
-                sha256: 'mno345',
-                dependencies: [],
-                permissions: [],
-                rating: 4.6,
-                downloads: 2100,
-                verified: true
-            },
-            {
-                id: 'finance-tracker',
-                name: 'Finance Tracker',
-                description: 'Track expenses, budgets, and financial goals',
-                version: '1.3.2',
-                author: 'FinTech Solutions',
-                type: ExtensionType.MCP_SERVER,
-                category: 'finance',
-                tags: ['finance', 'budget', 'expenses', 'money'],
-                downloadUrl: 'https://example.com/extensions/finance-tracker.zip',
-                sha256: 'pqr678',
-                dependencies: [],
-                permissions: [],
-                rating: 4.4,
-                downloads: 1560,
-                verified: true
-            },
-            {
-                id: 'news-reader',
-                name: 'News Reader',
-                description: 'Get news summaries from various sources',
-                version: '1.0.5',
-                author: 'News Aggregator',
-                type: ExtensionType.MCP_SERVER,
-                category: 'information',
-                tags: ['news', 'articles', 'media'],
-                downloadUrl: 'https://example.com/extensions/news-reader.zip',
-                sha256: 'stu901',
-                dependencies: [],
-                permissions: ['network'],
-                rating: 4.1,
-                downloads: 780,
-                verified: false
-            },
-            {
-                id: 'music-control',
-                name: 'Music Control',
-                description: 'Control music playback on various streaming services',
-                version: '2.1.0',
-                author: 'AudioTech',
-                type: ExtensionType.INTEGRATION,
-                category: 'entertainment',
-                tags: ['music', 'spotify', 'audio', 'streaming'],
-                downloadUrl: 'https://example.com/extensions/music-control.zip',
-                sha256: 'vwx234',
-                dependencies: [],
-                permissions: ['network'],
-                rating: 4.9,
-                downloads: 4230,
-                verified: true
-            }
-        ];
-    }
 }
 
 module.exports = {
@@ -786,5 +769,6 @@ module.exports = {
     ExtensionInfo,
     InstalledExtension,
     ExtensionType,
-    ExtensionStatus
+    ExtensionStatus,
+    MOLTBOOK_CATALOG_URL
 };
