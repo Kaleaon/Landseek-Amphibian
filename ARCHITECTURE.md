@@ -99,7 +99,7 @@ We are exploring integration with [ToolNeuron](https://github.com/Siddhesh2377/T
 
 | Component | Current | With ToolNeuron |
 |-----------|---------|-----------------|
-| **RAG Embeddings** | Mock hash-based vectors | all-MiniLM-L6-v2 (768-dim semantic) |
+| **RAG Embeddings** | Mock hash-based vectors | all-MiniLM-L6-v2 (384-dim semantic) |
 | **LLM Inference** | MediaPipe Gemma (.bin) | Additional GGUF model support |
 | **Function Calling** | Via Node.js bridge | Native grammar-based JSON schema |
 | **Document Processing** | Node.js DocumentManager | Native PDF, Word, Excel, EPUB parsing |

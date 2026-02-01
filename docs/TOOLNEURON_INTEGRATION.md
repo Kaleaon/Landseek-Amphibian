@@ -9,7 +9,7 @@ ToolNeuron is an Android-native AI assistant library that provides several capab
 | Feature | Current Amphibian Implementation | ToolNeuron Capability |
 |---------|----------------------------------|----------------------|
 | **LLM Inference** | MediaPipe Gemma models (.bin) | Native GGUF support (any model) |
-| **RAG Embeddings** | Mock hash-based vectors | all-MiniLM-L6-v2-Q5_K_M (768-dim) |
+| **RAG Embeddings** | Mock hash-based vectors | all-MiniLM-L6-v2-Q5_K_M (384-dim) |
 | **Function Calling** | Via Node.js bridge | Native grammar-based JSON schema |
 | **Document Processing** | Via Node.js DocumentManager | Native PDF, Word, Excel, EPUB parsing |
 | **Text-to-Speech** | Not implemented | 10 voices, 5 languages, on-device |
@@ -83,7 +83,7 @@ class EmbeddingService(private val context: Context) {
     
     suspend fun embed(text: String): FloatArray = withContext(Dispatchers.Default) {
         // Tokenize and run inference
-        // Returns 768-dimensional embedding vector
+        // Returns 384-dimensional embedding vector
     }
 }
 ```
