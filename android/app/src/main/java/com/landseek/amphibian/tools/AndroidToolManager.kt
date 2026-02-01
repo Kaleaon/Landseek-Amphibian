@@ -174,10 +174,17 @@ class AndroidToolManager(
         val config = OptimizedModelSets.ModelConfig(
             name = modelName,
             filename = modelName,
-            description = "Manually loaded",
             sizeBytes = size,
             priority = 0,
-            quantization = "unknown"
+            quantization = "unknown",
+            minRamMB = 4000,
+            supportedBackends = listOf("cpu"),
+            supportedTasks = listOf(OptimizedModelSets.TaskType.GENERAL_CHAT),
+            maxContextLength = 2048,
+            recommendedTemperature = 0.7f,
+            recommendedTopK = 40,
+            supportsStreaming = true,
+            supportsOpenClaw = false
         )
 
         val result = runBlocking { modelSetManager.loadModel(config) }

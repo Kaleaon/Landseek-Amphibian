@@ -315,24 +315,24 @@ class EmbeddingService(private val context: Context) {
                                 // Need to mean pool over sequence - safely cast with check
                                 @Suppress("UNCHECKED_CAST")
                                 val sequenceOutput = (firstElement as? Array<FloatArray>)
-                                    ?: return@withContext generateFallbackEmbedding(text)
+                                    ?: return generateFallbackEmbedding(text)
                                 meanPool(sequenceOutput, tokens.size + 2) // +2 for CLS and SEP
                             }
                             else -> {
                                 Log.w(TAG, "Unexpected inner output type: ${firstElement?.javaClass}")
-                                return@withContext generateFallbackEmbedding(text)
+                                return generateFallbackEmbedding(text)
                             }
                         }
                     }
                     is FloatArray -> outputValue
                     else -> {
                         Log.w(TAG, "Unexpected ONNX output type: ${outputValue?.javaClass}")
-                        return@withContext generateFallbackEmbedding(text)
+                        return generateFallbackEmbedding(text)
                     }
                 }
             } catch (e: ClassCastException) {
                 Log.w(TAG, "ONNX output cast failed: ${e.message}")
-                return@withContext generateFallbackEmbedding(text)
+                return generateFallbackEmbedding(text)
             }
             
             // Normalize
@@ -383,12 +383,12 @@ class EmbeddingService(private val context: Context) {
         
         for (i in 0 until validLength.coerceAtMost(sequenceOutput.size)) {
             for (j in 0 until dim) {
-                result[j] += sequenceOutput[i][j]
+                result.set(j, result.get(j) + sequenceOutput[i][j])
             }
         }
         
         for (j in 0 until dim) {
-            result[j] /= validLength
+            result.set(j, result.get(j) / validLength.toFloat())
         }
         
         return result
@@ -406,7 +406,7 @@ class EmbeddingService(private val context: Context) {
         
         if (norm > 0) {
             for (i in vec.indices) {
-                vec[i] /= norm
+                vec.set(i, vec.get(i) / norm)
             }
         }
         return vec

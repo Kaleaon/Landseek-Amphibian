@@ -58,6 +58,7 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AmphibianApp(service: AmphibianCoreService?) {
     var input by remember { mutableStateOf("") }
