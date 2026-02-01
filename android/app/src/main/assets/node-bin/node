@@ -1,1 +1,12 @@
-dummy node binary
+#!/system/bin/sh
+# Placeholder Node.js binary
+# Replace this with a real aarch64-linux-android Node.js binary
+#
+# Options:
+# 1. Download from nodejs-mobile project
+# 2. Build from source using Android NDK
+# 3. Use termux's Node.js binary
+
+echo "ERROR: This is a placeholder. Please install a real Node.js binary."
+echo "See scripts/setup_runtime.sh for instructions."
+exit 1

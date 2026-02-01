@@ -18,6 +18,24 @@ echo ""
 # Create target directory
 mkdir -p "$TARGET_DIR"
 
+create_placeholder() {
+    cat > "$TARGET_DIR/node" << 'EOF'
+#!/system/bin/sh
+# Placeholder Node.js binary
+# Replace this with a real aarch64-linux-android Node.js binary
+#
+# Options:
+# 1. Download from nodejs-mobile project
+# 2. Build from source using Android NDK
+# 3. Use termux's Node.js binary
+
+echo "ERROR: This is a placeholder. Please install a real Node.js binary."
+echo "See scripts/setup_runtime.sh for instructions."
+exit 1
+EOF
+    chmod +x "$TARGET_DIR/node"
+}
+
 # Check if we're on a system that can build for Android
 if command -v ndk-build &> /dev/null; then
     echo "📦 Android NDK detected. Building Node.js from source..."
@@ -35,7 +53,7 @@ DOWNLOAD_URL="https://github.com/nicknisi/nodejs-mobile/releases/download/v18.19
 TEMP_DIR=$(mktemp -d)
 
 # Try to download, fall back to placeholder if network unavailable
-if curl -L --connect-timeout 10 -o "$TEMP_DIR/node.tar.gz" "$DOWNLOAD_URL" 2>/dev/null; then
+if curl -fL --connect-timeout 10 -o "$TEMP_DIR/node.tar.gz" "$DOWNLOAD_URL" 2>/dev/null; then
     echo "✅ Download complete. Extracting..."
     tar -xzf "$TEMP_DIR/node.tar.gz" -C "$TEMP_DIR"
     
@@ -57,24 +75,6 @@ else
     create_placeholder
 fi
 
-create_placeholder() {
-    cat > "$TARGET_DIR/node" << 'EOF'
-#!/system/bin/sh
-# Placeholder Node.js binary
-# Replace this with a real aarch64-linux-android Node.js binary
-# 
-# Options:
-# 1. Download from nodejs-mobile project
-# 2. Build from source using Android NDK
-# 3. Use termux's Node.js binary
-
-echo "ERROR: This is a placeholder. Please install a real Node.js binary."
-echo "See scripts/setup_runtime.sh for instructions."
-exit 1
-EOF
-    chmod +x "$TARGET_DIR/node"
-}
-
 # Verify the binary
 echo ""
 echo "📋 Verifying installation..."
@@ -95,4 +95,3 @@ echo ""
 echo "Next steps:"
 echo "  1. Run ./scripts/bundle_bridge.sh to package the bridge code"
 echo "  2. Run cd android && ./gradlew assembleDebug to build the APK"
-
