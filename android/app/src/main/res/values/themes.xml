@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <style name="Theme.Amphibian" parent="android:Theme.Material.NoActionBar">
+        <item name="android:colorPrimary">@color/amphibian_primary</item>
+        <item name="android:colorPrimaryDark">@color/amphibian_primary_dark</item>
+        <item name="android:colorAccent">@color/amphibian_primary</item>
+        <item name="android:windowBackground">@color/amphibian_background</item>
+        <item name="android:statusBarColor">@color/amphibian_background</item>
+        <item name="android:navigationBarColor">@color/amphibian_background</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:windowLightNavigationBar">false</item>
+    </style>
+
+    <style name="Theme.Amphibian.Splash" parent="Theme.Amphibian">
+        <item name="android:windowBackground">@drawable/splash_background</item>
+    </style>
+
+</resources>

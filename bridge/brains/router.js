@@ -4,10 +4,13 @@
  * Routes tasks to the best available brain based on the request type and active configuration.
  */
 
+const LRUCache = require('./lru_cache');
+
 class MultiBrain {
     constructor(localBrain) {
         this.localBrain = localBrain;
         this.brains = {}; // Registry of available brains/servers (just names or config)
+        this.cache = new LRUCache(50); // Cache up to 50 recent routing decisions
     }
 
     register(name, brainData) {
@@ -17,6 +20,19 @@ class MultiBrain {
 
     async route(task, contextHistory = []) {
         console.log('🤔 Router: Analyzing intent...');
+
+        // Check cache first
+        const cached = this.cache.get(task);
+        if (cached) {
+            console.log(`🧠 Router Decision (Cached): ${JSON.stringify(cached)}`);
+            if (cached.tool === 'local' || this.brains[cached.tool]) {
+                return {
+                    toolName: cached.tool,
+                    confidence: cached.confidence,
+                    reason: 'LLM Classification (Cached)'
+                };
+            }
+        }
         
         // 1. Try Local LLM Classification
         if (this.localBrain) {
@@ -30,6 +46,7 @@ Available Tools:
 - stitch: UI generation, screen design, frontend layouts.
 - context7: Memory, searching past conversations, long-term context.
 - android: Sending SMS, making calls, system settings.
+- collective: Distributed inference across multiple devices (use for complex or compute-heavy tasks when collective pool is available).
 - local: General chat, reasoning, simple questions, or if no other tool fits.
 
 User Request: "${task}"
@@ -50,6 +67,8 @@ Return ONLY a JSON object with this format:
                         // Check if the decided tool is actually available (registered)
                         // 'local' is always available if localBrain is there.
                         if (decision.confidence > 0.6) {
+                            this.cache.set(task, decision);
+
                             if (decision.tool === 'local' || this.brains[decision.tool]) {
                                 return {
                                     toolName: decision.tool,

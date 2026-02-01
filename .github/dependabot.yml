@@ -1,0 +1,37 @@
+version: 2
+updates:
+  # JavaScript/Node.js dependencies for bridge
+  - package-ecosystem: "npm"
+    directory: "/bridge"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "javascript"
+    commit-message:
+      prefix: "deps(js):"
+
+  # Gradle dependencies for Android
+  - package-ecosystem: "gradle"
+    directory: "/android"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "android"
+    commit-message:
+      prefix: "deps(android):"
+
+  # GitHub Actions
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 3
+    labels:
+      - "dependencies"
+      - "github-actions"
+    commit-message:
+      prefix: "ci:"
