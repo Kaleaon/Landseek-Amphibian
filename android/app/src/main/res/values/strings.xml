@@ -1,8 +1,4 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Amphibian AI</string>
-    <string name="notification_channel_name">Amphibian Service</string>
-    <string name="notification_channel_description">AI agent background processing</string>
-    <string name="notification_title">Amphibian Active</string>
-    <string name="notification_text">AI agent is running</string>
+    <string name="app_name">Landseek Amphibian</string>
 </resources>

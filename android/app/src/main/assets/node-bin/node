@@ -1,1 +1,2 @@
-dummy node binary
+#!/system/bin/sh
+echo 'Node.js Placeholder - Please run build_runtime.sh to fetch real binary'

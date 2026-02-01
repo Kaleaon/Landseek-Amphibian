@@ -4,112 +4,17 @@
     "version": "1.0.0",
     "personality": "Amphibious",
     "avatar": "🦎",
-    "bio": "I live in the app and in the shell. I am the bridge between your Android device and intelligent AI agents."
+    "bio": "I live in the app and in the shell. I am the bridge."
   },
   "capabilities": {
     "host_mode": "auto",
     "mcp_enabled": true,
-    "p2p_enabled": true,
-    "streaming_enabled": true,
-    "tpu_acceleration": true,
-    "collective_mode": true
+    "p2p_enabled": true
   },
   "brains": [
-    { 
-      "id": "local_tpu", 
-      "model": "gemma-3-4b-it", 
-      "priority": 1,
-      "role": "primary",
-      "description": "On-device TPU inference for general chat and reasoning"
-    },
-    { 
-      "id": "local_fallback", 
-      "model": "gemma-2b-it", 
-      "priority": 2,
-      "role": "fallback",
-      "description": "Smaller model for faster responses when TPU is busy"
-    },
-    { 
-      "id": "collective", 
-      "priority": 2,
-      "role": "distributed",
-      "description": "Collective brain pooled across multiple devices for distributed inference"
-    },
-    { 
-      "id": "google_jules", 
-      "priority": 3, 
-      "role": "coder",
-      "description": "Google Jules for code generation and refactoring"
-    },
-    { 
-      "id": "google_stitch", 
-      "priority": 3, 
-      "role": "designer",
-      "description": "Google Stitch for UI/UX generation"
-    },
-    { 
-      "id": "context7", 
-      "priority": 3, 
-      "role": "librarian",
-      "description": "Context7 for long-term memory and knowledge retrieval"
-    }
-  ],
-  "tools": {
-    "android": [
-      "send_sms",
-      "make_call",
-      "read_file",
-      "write_file",
-      "list_files",
-      "get_location",
-      "open_url",
-      "get_clipboard",
-      "set_clipboard",
-      "get_notifications",
-      "send_notification"
-    ],
-    "memory": [
-      "remember",
-      "recall",
-      "sync_peer",
-      "discover_peers"
-    ],
-    "ai": [
-      "inference"
-    ],
-    "collective": [
-      "start_pool",
-      "join_pool",
-      "leave_pool",
-      "pool_status"
-    ]
-  },
-  "permissions": {
-    "required": [
-      "android.permission.INTERNET",
-      "android.permission.FOREGROUND_SERVICE"
-    ],
-    "optional": [
-      "android.permission.SEND_SMS",
-      "android.permission.CALL_PHONE",
-      "android.permission.READ_EXTERNAL_STORAGE",
-      "android.permission.WRITE_EXTERNAL_STORAGE",
-      "android.permission.ACCESS_FINE_LOCATION",
-      "android.permission.BIND_NOTIFICATION_LISTENER_SERVICE"
-    ]
-  },
-  "server": {
-    "port": 3000,
-    "host": "127.0.0.1",
-    "protocol": "websocket"
-  },
-  "collective": {
-    "default_port": 8766,
-    "max_devices": 10,
-    "timeout_base": 30000,
-    "timeout_max": 120000,
-    "redundancy_factor": 1.5,
-    "speculative_execution": true,
-    "adaptive_timeout": true
-  }
+    { "id": "local_tpu", "model": "gemma-3-4b-it", "priority": 1 },
+    { "id": "google_jules", "priority": 2, "role": "coder" },
+    { "id": "google_stitch", "priority": 2, "role": "designer" },
+    { "id": "context7", "priority": 2, "role": "librarian" }
+  ]
 }
