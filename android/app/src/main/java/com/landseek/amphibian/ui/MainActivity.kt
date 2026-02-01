@@ -17,23 +17,40 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import com.landseek.amphibian.service.AmphibianCoreService
 import android.content.Intent
-import android.content.ServiceConnection
 import android.content.ComponentName
 import android.content.Context
+import android.content.ServiceConnection
 import android.os.IBinder
 
 class MainActivity : ComponentActivity() {
-
-    private var coreService by mutableStateOf<AmphibianCoreService?>(null)
+    private var amphibianService: AmphibianCoreService? = null
+    private var isBound = false
 
     private val connection = object : ServiceConnection {
         override fun onServiceConnected(className: ComponentName, service: IBinder) {
             val binder = service as AmphibianCoreService.LocalBinder
-            coreService = binder.getService()
+            amphibianService = binder.getService()
+            isBound = true
         }
 
         override fun onServiceDisconnected(arg0: ComponentName) {
-            coreService = null
+            isBound = false
+            amphibianService = null
+        }
+    }
+
+    override fun onStart() {
+        super.onStart()
+        Intent(this, AmphibianCoreService::class.java).also { intent ->
+            bindService(intent, connection, Context.BIND_AUTO_CREATE)
+        }
+    }
+
+    override fun onStop() {
+        super.onStop()
+        if (isBound) {
+            unbindService(connection)
+            isBound = false
         }
     }
 
@@ -41,25 +58,25 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         
         // Auto-start the Brain Service
-        val intent = Intent(this, AmphibianCoreService::class.java)
-        startForegroundService(intent)
-        bindService(intent, connection, Context.BIND_AUTO_CREATE)
+        startForegroundService(Intent(this, AmphibianCoreService::class.java))
 
         setContent {
             MaterialTheme(colorScheme = darkColorScheme()) {
-                AmphibianApp(coreService)
+                AmphibianApp(
+                    onSendMessage = { message ->
+                        if (isBound) {
+                            amphibianService?.executeTask(message)
+                        }
+                    }
+                )
             }
         }
     }
-
-    override fun onDestroy() {
-        super.onDestroy()
-        unbindService(connection)
-    }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun AmphibianApp(service: AmphibianCoreService?) {
+fun AmphibianApp(onSendMessage: (String) -> Unit = {}) {
     var input by remember { mutableStateOf("") }
     val messages = remember { mutableStateListOf<Message>() }
 
@@ -68,18 +85,11 @@ fun AmphibianApp(service: AmphibianCoreService?) {
         messages.add(Message("Amphibian Agent", "Core systems online. Node.js bridge active. 🐸", true))
     }
 
-    // Listen to Agent messages
-    LaunchedEffect(service) {
-        service?.messageFlow?.collect { msg ->
-            messages.add(Message("Amphibian Agent", msg, true))
-        }
-    }
-
     Column(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
         // Header
-        SmallTopAppBar(
+        TopAppBar(
             title = { Text("Landseek Amphibian") },
-            colors = TopAppBarDefaults.smallTopAppBarColors(
+            colors = TopAppBarDefaults.topAppBarColors(
                 containerColor = MaterialTheme.colorScheme.surfaceVariant
             )
         )
@@ -108,7 +118,7 @@ fun AmphibianApp(service: AmphibianCoreService?) {
                 keyboardActions = KeyboardActions(onSend = {
                     if (input.isNotBlank()) {
                         messages.add(Message("You", input, false))
-                        service?.executeTask(input)
+                        onSendMessage(input)
                         input = ""
                     }
                 })
@@ -116,7 +126,7 @@ fun AmphibianApp(service: AmphibianCoreService?) {
             Button(onClick = {
                 if (input.isNotBlank()) {
                     messages.add(Message("You", input, false))
-                    service?.executeTask(input)
+                    onSendMessage(input)
                     input = ""
                 }
             }) {
