@@ -24,7 +24,7 @@ import java.util.concurrent.TimeUnit
 import com.landseek.amphibian.tools.AndroidToolManager
 
 /**
- * AmphibianCoreService (ToolNeuron + MediaPipe Integration)
+ * AmphibianCoreService (ToolNeuron + MediaPipe + OpenClaw Integration)
  *
  * This Foreground Service is responsible for:
  * 1. Extracting the Node.js runtime from assets (if needed).
@@ -35,6 +35,7 @@ import com.landseek.amphibian.tools.AndroidToolManager
  * 6. Text-to-Speech for voice output (ToolNeuron pattern)
  * 7. Document parsing for RAG (PDF, Word, Excel)
  * 8. Vision tasks (Object Detection, Face Detection, Hand Tracking)
+ * 9. **Optimized AI Model Sets with full OpenClaw integration**
  * 
  * TPU Support:
  * - Pixel 10: Tensor G5 with INT4 quantization (Best)
@@ -43,6 +44,13 @@ import com.landseek.amphibian.tools.AndroidToolManager
  * - Pixel 7: Tensor G2 TPU
  * - Pixel 6: Tensor G1 TPU
  * - Other: GPU/CPU fallback
+ * 
+ * Model Sets:
+ * - FLAGSHIP_FULL: Maximum capability for Pixel 10
+ * - HIGH_PERFORMANCE: Optimized for Pixel 8-9
+ * - BALANCED: Mid-range devices
+ * - EFFICIENCY: Battery-optimized for lower-end
+ * - DISTRIBUTED: OpenClaw collective inference
  * 
  * @see https://github.com/Siddhesh2377/ToolNeuron
  * @see https://github.com/google-ai-edge/mediapipe
@@ -66,6 +74,9 @@ class AmphibianCoreService : Service() {
     
     // MediaPipe Integration Services
     private lateinit var visionService: MediaPipeVisionService
+    
+    // Optimized Model Set Management
+    private lateinit var modelSetManager: ModelSetManager
 
     // Event Stream
     private val _messageFlow = MutableSharedFlow<String>(replay = 0)
@@ -111,6 +122,9 @@ class AmphibianCoreService : Service() {
         // Initialize MediaPipe vision service
         visionService = MediaPipeVisionService(this)
         
+        // Initialize Model Set Manager for optimized AI model loading
+        modelSetManager = ModelSetManager(this)
+        
         createNotificationChannel()
         
         // Log TPU capabilities on startup
@@ -144,6 +158,7 @@ class AmphibianCoreService : Service() {
                 val ttsJob = async { ttsService.initialize() }
                 val docJob = async { documentParser.initialize() }
                 val visionJob = async { visionService.initialize() }
+                val modelSetJob = async { modelSetManager.initialize() }
                 
                 bootstrapRuntime()
                 startNodeProcess()
@@ -154,6 +169,7 @@ class AmphibianCoreService : Service() {
                 val ttsReady = ttsJob.await()
                 val docReady = docJob.await()
                 val visionReady = visionJob.await()
+                val modelSetReady = modelSetJob.await()
                 
                 // Log service status
                 val servicesReady = listOf(
@@ -161,18 +177,25 @@ class AmphibianCoreService : Service() {
                     "RAG" to ragReady,
                     "TTS" to ttsReady,
                     "Documents" to docReady,
-                    "Vision" to visionReady
+                    "Vision" to visionReady,
+                    "ModelSets" to modelSetReady
                 )
                 
                 val readyCount = servicesReady.count { it.second }
                 val totalCount = servicesReady.size
                 
+                // Get model set info
+                val modelSetName = modelSetManager.currentModelSet.value?.name ?: "None"
+                val openClawEnabled = modelSetManager.getOpenClawConfig()?.enableDistributedInference ?: false
+                
                 Log.i(TAG, """
                     ╔════════════════════════════════════════════════════════════╗
-                    ║     🦎 Amphibian Core Ready! (ToolNeuron + MediaPipe)      ║
+                    ║  🦎 Amphibian Core Ready! (ToolNeuron + MediaPipe + OpenClaw) ║
                     ╠════════════════════════════════════════════════════════════╣
                     ║ Backend: ${backendName.padEnd(45)}║
                     ║ Device Tier: ${caps.deviceTier.name.padEnd(41)}║
+                    ║ Model Set: ${modelSetName.padEnd(43)}║
+                    ║ OpenClaw: ${if (openClawEnabled) "Enabled" else "Disabled".padEnd(44)}║
                     ║ Services: $readyCount/$totalCount initialized                              ║
                     ╠════════════════════════════════════════════════════════════╣
                     ║ LLM: ${if (llmReady) "✅" else "❌"} | RAG: ${if (ragReady) "✅" else "❌"} | TTS: ${if (ttsReady) "✅" else "❌"} | Docs: ${if (docReady) "✅" else "❌"} | Vision: ${if (visionReady) "✅" else "❌"}  ║
@@ -659,7 +682,8 @@ class AmphibianCoreService : Service() {
             visionStatus = visionService.getStatus(),
             ragMemoryCount = ragService.getMemoryCount(),
             ragUsingRealEmbeddings = ragService.isUsingRealEmbeddings(),
-            tpuCapabilities = tpuService.detectCapabilities()
+            tpuCapabilities = tpuService.detectCapabilities(),
+            modelSetStatus = modelSetManager.getStatus()
         )
     }
     
@@ -671,8 +695,102 @@ class AmphibianCoreService : Service() {
         val visionStatus: MediaPipeVisionService.VisionServiceStatus,
         val ragMemoryCount: Int,
         val ragUsingRealEmbeddings: Boolean,
-        val tpuCapabilities: TPUCapabilityService.TPUCapabilities
+        val tpuCapabilities: TPUCapabilityService.TPUCapabilities,
+        val modelSetStatus: ModelSetManager.ModelSetManagerStatus
     )
+    
+    // ===== Model Set Management (OpenClaw Integration) =====
+    
+    /**
+     * Get current model set
+     */
+    fun getCurrentModelSet(): OptimizedModelSets.ModelSet? {
+        return modelSetManager.currentModelSet.value
+    }
+    
+    /**
+     * Load a specific model set
+     */
+    suspend fun loadModelSet(modelSetType: OptimizedModelSets.ModelSetType): Boolean {
+        val modelSet = when (modelSetType) {
+            OptimizedModelSets.ModelSetType.FLAGSHIP_FULL -> OptimizedModelSets.FLAGSHIP_FULL
+            OptimizedModelSets.ModelSetType.HIGH_PERFORMANCE -> OptimizedModelSets.HIGH_PERFORMANCE
+            OptimizedModelSets.ModelSetType.BALANCED -> OptimizedModelSets.BALANCED
+            OptimizedModelSets.ModelSetType.EFFICIENCY -> OptimizedModelSets.EFFICIENCY
+            OptimizedModelSets.ModelSetType.DISTRIBUTED -> OptimizedModelSets.DISTRIBUTED
+            OptimizedModelSets.ModelSetType.CUSTOM -> return false
+        }
+        return modelSetManager.loadModelSet(modelSet)
+    }
+    
+    /**
+     * Get best model for a specific task
+     */
+    fun getBestModelForTask(task: OptimizedModelSets.TaskType): OptimizedModelSets.ModelConfig? {
+        return modelSetManager.getBestModelForTask(task)
+    }
+    
+    /**
+     * Switch to optimal model for a task
+     */
+    suspend fun switchToTaskOptimalModel(task: OptimizedModelSets.TaskType): Boolean {
+        return modelSetManager.switchToTaskOptimalModel(task)
+    }
+    
+    /**
+     * Get all compatible models for this device
+     */
+    fun getCompatibleModels(): List<OptimizedModelSets.ModelConfig> {
+        return modelSetManager.getCompatibleModels()
+    }
+    
+    /**
+     * Get model set recommendations
+     */
+    fun getModelSetRecommendations(): List<ModelSetManager.ModelSetRecommendation> {
+        return modelSetManager.getModelSetRecommendations()
+    }
+    
+    /**
+     * Check if distributed inference is available
+     */
+    fun canUseDistributedInference(): Boolean {
+        return modelSetManager.canUseDistributedInference()
+    }
+    
+    /**
+     * Get OpenClaw configuration
+     */
+    fun getOpenClawConfig(): OptimizedModelSets.OpenClawConfig? {
+        return modelSetManager.getOpenClawConfig()
+    }
+    
+    /**
+     * Update OpenClaw status from bridge
+     */
+    fun updateOpenClawStatus(
+        isConnected: Boolean,
+        poolName: String?,
+        connectedPeers: Int,
+        availableTasks: Int
+    ) {
+        modelSetManager.updateOpenClawStatus(
+            ModelSetManager.OpenClawStatus(
+                isConnected = isConnected,
+                poolName = poolName,
+                connectedPeers = connectedPeers,
+                availableTasks = availableTasks,
+                canDistribute = connectedPeers >= (getOpenClawConfig()?.minPeersForDistributed ?: Int.MAX_VALUE)
+            )
+        )
+    }
+    
+    /**
+     * Get model set manager status
+     */
+    fun getModelSetManagerStatus(): ModelSetManager.ModelSetManagerStatus {
+        return modelSetManager.getStatus()
+    }
 
     override fun onDestroy() {
         super.onDestroy()
@@ -685,6 +803,7 @@ class AmphibianCoreService : Service() {
         ragService.close()
         ttsService.shutdown()
         visionService.close()
+        modelSetManager.close()
         toolManager.destroy()
         
         Log.d(TAG, "Amphibian Service Destroyed")
