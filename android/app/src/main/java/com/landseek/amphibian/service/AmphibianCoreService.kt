@@ -282,6 +282,13 @@ class AmphibianCoreService : Service() {
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to extract Node binary", e)
             }
+        } else {
+            // Ensure executable if it already exists
+            try {
+                nodeBin.setExecutable(true)
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to set executable permission on existing binary", e)
+            }
         }
         
         // Extract bridge scripts from assets
@@ -554,7 +561,7 @@ class AmphibianCoreService : Service() {
      * Get TTS configuration
      */
     fun getTTSConfiguration(): TTSService.TTSConfiguration {
-        return ttsService.getConfiguration() ?: TTSService.TTSConfiguration(1.0f, false)
+        return ttsService.getConfiguration()
     }
     
     /**
@@ -678,7 +685,7 @@ class AmphibianCoreService : Service() {
             isConnected = isConnected,
             llmReady = llmService.isReady(),
             llmModel = llmService.getCurrentModel(),
-            ttsReady = ttsService.isReady.value ?: false,
+            ttsReady = ttsService.isReady.value,
             visionStatus = visionService.getStatus(),
             ragMemoryCount = ragService.getMemoryCount(),
             ragUsingRealEmbeddings = ragService.isUsingRealEmbeddings(),

@@ -8,6 +8,8 @@ import com.tom_roush.pdfbox.pdmodel.PDDocument
 import com.tom_roush.pdfbox.text.PDFTextStripper
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import org.apache.poi.hwpf.HWPFDocument
+import org.apache.poi.hwpf.extractor.WordExtractor
 import org.apache.poi.xwpf.usermodel.XWPFDocument
 import org.apache.poi.hssf.usermodel.HSSFWorkbook
 import org.apache.poi.xssf.usermodel.XSSFWorkbook
@@ -344,8 +346,6 @@ class DocumentParserService(private val context: Context) {
     
     /**
      * Parse DOC document (Binary format)
-     * NOTE: HWPFDocument (for old .doc format) is not fully supported in the current POI-Android build.
-     * This method is a stub that returns an error for .doc files until the dependency is updated.
      */
     private fun parseDoc(
         inputStream: InputStream,
@@ -353,16 +353,45 @@ class DocumentParserService(private val context: Context) {
         chunkSize: Int,
         chunkOverlap: Int
     ): ParseResult {
-        // HWPFDocument and WordExtractor are not available in the current POI library subset.
-        // Returning a graceful error instead of crashing at compile time.
-        Log.e(TAG, "DOC format (.doc) parsing is currently disabled due to library limitations.")
-        return ParseResult(
-            success = false,
-            text = "",
-            metadata = createEmptyMetadata(DocumentType.DOC, fileName),
-            chunks = emptyList(),
-            error = "DOC format (.doc) not supported in this version. Please use DOCX."
-        )
+        return try {
+            HWPFDocument(inputStream).use { document ->
+                WordExtractor(document).use { extractor ->
+                    val text = extractor.text
+                    
+                    val summaryInfo = document.summaryInformation
+                    val metadata = DocumentMetadata(
+                        title = summaryInfo?.title,
+                        author = summaryInfo?.author,
+                        subject = summaryInfo?.subject,
+                        pageCount = summaryInfo?.pageCount ?: 0,
+                        wordCount = text.split("\\s+".toRegex()).size,
+                        characterCount = text.length,
+                        documentType = DocumentType.DOC,
+                        fileName = fileName
+                    )
+                    
+                    val chunks = createChunks(text, chunkSize, chunkOverlap, "DOC")
+                    
+                    Log.d(TAG, "Parsed DOC: ${metadata.wordCount} words")
+                    
+                    ParseResult(
+                        success = true,
+                        text = text,
+                        metadata = metadata,
+                        chunks = chunks
+                    )
+                }
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "DOC parse error: ${e.message}", e)
+            ParseResult(
+                success = false,
+                text = "",
+                metadata = createEmptyMetadata(DocumentType.DOC, fileName),
+                chunks = emptyList(),
+                error = "DOC parse error: ${e.message}"
+            )
+        }
     }
     
     /**

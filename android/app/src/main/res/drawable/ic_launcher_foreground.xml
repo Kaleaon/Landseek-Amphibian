@@ -17,11 +17,11 @@
                           L74,68 L69,58
                           C71,55 72,52 72,48
                           C72,38 64,30 54,30Z"/>
-    <!-- Left eye -->
+    <!-- Left eye (Circle centered at 46,44 radius 4) -->
     <path
         android:fillColor="#1DB954"
         android:pathData="M50,44 A4,4 0 1,1 42,44 A4,4 0 1,1 50,44"/>
-    <!-- Right eye -->
+    <!-- Right eye (Circle centered at 62,44 radius 4) -->
     <path
         android:fillColor="#1DB954"
         android:pathData="M66,44 A4,4 0 1,1 58,44 A4,4 0 1,1 66,44"/>
