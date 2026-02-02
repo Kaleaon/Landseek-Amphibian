@@ -308,9 +308,18 @@ class EmbeddingService(private val context: Context) {
         // Create ONNX tensors
         val shape = longArrayOf(1, MAX_SEQ_LENGTH.toLong())
         
-        val inputIdsTensor = OnnxTensor.createTensor(env, LongBuffer.wrap(inputIds), shape)
-        val attentionMaskTensor = OnnxTensor.createTensor(env, LongBuffer.wrap(attentionMask), shape)
-        val tokenTypeIdsTensor = OnnxTensor.createTensor(env, LongBuffer.wrap(tokenTypeIds), shape)
+        // Note: Using createTensor directly with arrays instead of LongBuffer for compatibility
+        // The LongBuffer signature isn't available in all versions of the Android ONNX runtime binding
+        // Using `createTensor(env, Object)` which handles primitive arrays.
+        // For batch size 1 and explicit shape, we might need nested arrays if pure reshape isn't available.
+        // [1, MAX_SEQ_LENGTH]
+        val inputIds2D = Array(1) { inputIds }
+        val attentionMask2D = Array(1) { attentionMask }
+        val tokenTypeIds2D = Array(1) { tokenTypeIds }
+
+        val inputIdsTensor = OnnxTensor.createTensor(env, inputIds2D)
+        val attentionMaskTensor = OnnxTensor.createTensor(env, attentionMask2D)
+        val tokenTypeIdsTensor = OnnxTensor.createTensor(env, tokenTypeIds2D)
         
         try {
             val inputs = mapOf(
@@ -339,7 +348,7 @@ class EmbeddingService(private val context: Context) {
                                 @Suppress("UNCHECKED_CAST")
                                 val sequenceOutput = (firstElement as? Array<FloatArray>)
                                     ?: return generateFallbackEmbedding(text)
-                                meanPool(sequenceOutput, validLength)
+                                meanPool(sequenceOutput, tokens.size + 2) // +2 for CLS and SEP
                             }
                             else -> {
                                 Log.w(TAG, "Unexpected inner output type: ${firstElement?.javaClass}")
@@ -395,12 +404,12 @@ class EmbeddingService(private val context: Context) {
         
         for (i in 0 until validLength.coerceAtMost(sequenceOutput.size)) {
             for (j in 0 until dim) {
-                result[j] += sequenceOutput[i][j]
+                result.set(j, result.get(j) + sequenceOutput[i][j])
             }
         }
         
         for (j in 0 until dim) {
-            result[j] /= validLength
+            result.set(j, result.get(j) / validLength.toFloat())
         }
         
         return result
@@ -418,7 +427,7 @@ class EmbeddingService(private val context: Context) {
         
         if (norm > 0) {
             for (i in vec.indices) {
-                vec[i] /= norm
+                vec.set(i, vec.get(i) / norm)
             }
         }
         return vec

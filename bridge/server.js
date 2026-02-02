@@ -76,6 +76,7 @@ const { PersonalityManager } = require('./personalities');
 const { DocumentManager } = require('./documents');
 const { CommandProcessor } = require('./commands');
 const { P2PHost, P2PClient } = require('./p2p');
+const ModelManager = require('./model_manager');
 
 // Collective Mode
 const { CollectiveCoordinator, CollectiveBrain, CollectiveClient } = require('./collective');
@@ -123,6 +124,11 @@ let androidToolCallback = global.androidBridgeCallback || async function(toolNam
         simulated: true  // Flag to indicate this was a simulated response
     };
 };
+
+// Initialize Model Manager
+const modelManager = new ModelManager(async (tool, args) => {
+    return androidToolCallback(tool, args);
+});
 
 // Start MCP Servers (Brain Modules)
 async function startBrains() {
@@ -610,6 +616,41 @@ async function handleCommandAction(action, data) {
             const recallResult = await androidToolCallback('recall', { query: data.query });
             send(EVENTS.COMMAND_RESULT, { message: recallResult.output || 'No memories found.' });
             break;
+
+        case 'list_models':
+            try {
+                const list = await modelManager.listModels();
+                let msg = "**Available Models:**\n";
+                list.available.forEach(m => {
+                    const status = m.installed ? "✅ Installed" : (m.isDownloading ? `⬇️ ${m.progress}%` : "☁️ Cloud");
+                    const size = m.size ? formatSize(m.size) : 'Unknown size';
+                    msg += `- **${m.name}** (${m.id})\n  ${status} | ${size}\n  Filename: \`${m.filename}\`\n`;
+                });
+                send(EVENTS.COMMAND_RESULT, { message: msg });
+            } catch (e) {
+                send(EVENTS.ERROR, { message: `Failed to list models: ${e.message}` });
+            }
+            break;
+
+        case 'download_model':
+            send(EVENTS.COMMAND_RESULT, { message: `⬇️ Starting download for ${data.modelId}...` });
+            modelManager.downloadModel(data.modelId, (progress) => {
+                 // Optional: Send progress updates if needed, but might spam
+            }).then(() => {
+                 send(EVENTS.COMMAND_RESULT, { message: `✅ Download complete for ${data.modelId}` });
+            }).catch(e => {
+                 send(EVENTS.ERROR, { message: `Download failed: ${e.message}` });
+            });
+            break;
+
+        case 'switch_model':
+            try {
+                const res = await modelManager.switchModel(data.modelName);
+                send(EVENTS.COMMAND_RESULT, { message: res.success ? `✅ Switched to ${data.modelName}` : `❌ Failed: ${res.output}` });
+            } catch (e) {
+                send(EVENTS.ERROR, { message: `Switch failed: ${e.message}` });
+            }
+            break;
             
         // ============================================
         // COLLECTIVE MODE ACTIONS
@@ -1067,3 +1108,11 @@ server.listen(PORT, '127.0.0.1', () => {
     console.log(`🐸 Amphibian Bridge listening on 127.0.0.1:${PORT}`);
     console.log(`🎭 ${personalities.getActive().length} AI personalities active`);
 });
+
+function formatSize(bytes) {
+    if (bytes === 0) return '0 B';
+    const k = 1024;
+    const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+}

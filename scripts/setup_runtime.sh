@@ -53,7 +53,8 @@ DOWNLOAD_URL="https://github.com/nicknisi/nodejs-mobile/releases/download/v18.19
 TEMP_DIR=$(mktemp -d)
 
 # Try to download, fall back to placeholder if network unavailable
-if curl -L -f --connect-timeout 10 -o "$TEMP_DIR/node.tar.gz" "$DOWNLOAD_URL" 2>/dev/null; then
+# Use -f to fail on HTTP errors (like 404)
+if curl -f -L --connect-timeout 10 -o "$TEMP_DIR/node.tar.gz" "$DOWNLOAD_URL" 2>/dev/null; then
     echo "✅ Download complete. Extracting..."
     tar -xzf "$TEMP_DIR/node.tar.gz" -C "$TEMP_DIR"
     

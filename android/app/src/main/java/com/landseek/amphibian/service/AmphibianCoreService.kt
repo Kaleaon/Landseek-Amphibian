@@ -111,7 +111,6 @@ class AmphibianCoreService : Service() {
         
         // Initialize core services
         tpuService = TPUCapabilityService(this)
-        toolManager = AndroidToolManager(this)
         llmService = LocalLLMService(this)
         ragService = LocalRAGService(this)
         
@@ -123,7 +122,10 @@ class AmphibianCoreService : Service() {
         visionService = MediaPipeVisionService(this)
         
         // Initialize Model Set Manager for optimized AI model loading
-        modelSetManager = ModelSetManager(this)
+        modelSetManager = ModelSetManager(this, llmService)
+
+        // Initialize Tool Manager
+        toolManager = AndroidToolManager(this, llmService, ragService, modelSetManager)
         
         createNotificationChannel()
         

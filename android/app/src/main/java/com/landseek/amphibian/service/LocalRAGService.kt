@@ -40,22 +40,28 @@ class LocalRAGService(private val context: Context) {
     private val memories = mutableListOf<MemoryChunk>()
     private val mindMap = mutableMapOf<String, GraphNode>()
 
-    suspend fun initialize() {
-        withContext(Dispatchers.IO) {
-            Log.d(TAG, "Initializing Local RAG with TPU support...")
-            
-            // Initialize embedding service
-            embeddingService = EmbeddingService(context)
-            useRealEmbeddings = embeddingService?.initialize() == true
-            
-            if (useRealEmbeddings) {
-                Log.i(TAG, "✅ Using TPU-accelerated embeddings!")
-            } else {
-                Log.w(TAG, "⚠️ Using fallback mock embeddings")
+    suspend fun initialize(): Boolean {
+        return withContext(Dispatchers.IO) {
+            try {
+                Log.d(TAG, "Initializing Local RAG with TPU support...")
+
+                // Initialize embedding service
+                embeddingService = EmbeddingService(context)
+                useRealEmbeddings = embeddingService?.initialize() == true
+
+                if (useRealEmbeddings) {
+                    Log.i(TAG, "✅ Using TPU-accelerated embeddings!")
+                } else {
+                    Log.w(TAG, "⚠️ Using fallback mock embeddings")
+                }
+
+                loadMemories()
+                loadMindMap()
+                true
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to initialize RAG service", e)
+                false
             }
-            
-            loadMemories()
-            loadMindMap()
         }
     }
 
