@@ -111,7 +111,7 @@ jobs:
     
     - name: Upload compilation log on failure
       if: steps.compile.outcome == 'failure'
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v6
       with:
         name: compile-error-log
         path: android/compile_output.txt
@@ -140,7 +140,7 @@ jobs:
         fi
       
     - name: Upload test reports
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v6
       if: always()
       with:
         name: test-reports
@@ -259,7 +259,7 @@ jobs:
     
     - name: Upload build log on failure
       if: steps.build-debug.outcome == 'failure'
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v6
       with:
         name: build-error-log
         path: android/build_output.txt
@@ -335,14 +335,14 @@ jobs:
         
     - name: Upload debug APK
       if: steps.build-debug.outcome == 'success'
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v6
       with:
         name: debug-apk
         path: android/app/build/outputs/apk/debug/Amphibian-v${{ steps.version.outputs.version-name }}-debug.apk
         
     - name: Upload release APK
       if: steps.build-debug.outcome == 'success'
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v6
       with:
         name: release-apk
         path: android/app/build/outputs/apk/release/Amphibian-*.apk
