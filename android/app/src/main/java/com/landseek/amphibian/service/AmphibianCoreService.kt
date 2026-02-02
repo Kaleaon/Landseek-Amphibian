@@ -284,6 +284,13 @@ class AmphibianCoreService : Service() {
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to extract Node binary", e)
             }
+        } else {
+            // Ensure executable if it already exists
+            try {
+                nodeBin.setExecutable(true)
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to set executable permission on existing binary", e)
+            }
         }
         
         // Extract bridge scripts from assets

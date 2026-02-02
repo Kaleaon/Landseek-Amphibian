@@ -28,6 +28,7 @@ import java.nio.LongBuffer
  * Features:
  * - Real semantic embeddings via all-MiniLM-L6-v2 (ToolNeuron pattern)
  * - TPU/GPU acceleration on Pixel devices via MediaPipe
+ * - Proper WordPiece tokenization for ONNX backend
  * - Batch embedding support
  * - Automatic hardware detection and optimization
  * - Graceful fallback chain
@@ -53,6 +54,10 @@ class EmbeddingService(private val context: Context) {
     // TPU capability service for hardware detection
     private val tpuService = TPUCapabilityService(context)
     
+    // WordPiece tokenizer for proper ONNX tokenization
+    private var tokenizer: WordPieceTokenizer? = null
+    private var tokenizerInitialized = false
+    
     // Model configuration
     // MiniLM - ToolNeuron's recommended model (384-dim)
     private val MINILM_MODEL_FILENAME = "all-MiniLM-L6-v2.onnx"
@@ -65,12 +70,8 @@ class EmbeddingService(private val context: Context) {
     // Fallback embedding dimension
     private val FALLBACK_EMBEDDING_DIM = 384
     
-    // Simple tokenizer for MiniLM (word-piece approximation)
-    // In production, use a proper tokenizer like HuggingFace's tokenizers
+    // Max sequence length for tokenization
     private val MAX_SEQ_LENGTH = 128
-    private val PAD_TOKEN_ID = 0L
-    private val CLS_TOKEN_ID = 101L
-    private val SEP_TOKEN_ID = 102L
     
     // Performance tracking
     private var totalEmbeddings = 0
@@ -95,6 +96,16 @@ class EmbeddingService(private val context: Context) {
         val caps = tpuService.detectCapabilities()
         Log.d(TAG, "Initializing embeddings for ${caps.deviceTier} device")
         
+        // Initialize tokenizer first
+        tokenizer = WordPieceTokenizer(context)
+        tokenizerInitialized = tokenizer?.initialize() ?: false
+        
+        if (tokenizerInitialized) {
+            Log.i(TAG, "✅ WordPiece tokenizer initialized with ${tokenizer?.getVocabSize()} tokens")
+        } else {
+            Log.w(TAG, "⚠️ WordPiece tokenizer initialization failed, will use fallback")
+        }
+        
         // Try ONNX MiniLM first (ToolNeuron approach)
         if (tryInitializeOnnx()) {
             activeBackend = EmbeddingBackend.ONNX_MINILM
@@ -106,6 +117,7 @@ class EmbeddingService(private val context: Context) {
                 ║ Model: all-MiniLM-L6-v2                                    ║
                 ║ Dimensions: $MINILM_EMBEDDING_DIM                                          ║
                 ║ Backend: ONNX Runtime                                      ║
+                ║ Tokenizer: ${if (tokenizerInitialized) "WordPiece (Real)" else "Fallback (Hash)"} ║
                 ╚════════════════════════════════════════════════════════════╝
             """.trimIndent())
             return@withContext true
@@ -260,37 +272,54 @@ class EmbeddingService(private val context: Context) {
     }
     
     /**
-     * Generate embedding using ONNX MiniLM model
+     * Generate embedding using ONNX MiniLM model with proper WordPiece tokenization
      */
     private fun embedWithOnnx(text: String): FloatArray {
         val session = ortSession ?: throw IllegalStateException("ONNX session not initialized")
         val env = ortEnvironment ?: throw IllegalStateException("ONNX environment not initialized")
         
-        // Simple tokenization (in production, use proper WordPiece tokenizer)
-        val tokens = simpleTokenize(text)
-        
-        // Create input tensors
-        val inputIds = LongArray(MAX_SEQ_LENGTH) { i ->
-            when {
-                i == 0 -> CLS_TOKEN_ID
-                i < tokens.size + 1 -> tokens[i - 1]
-                i == tokens.size + 1 -> SEP_TOKEN_ID
-                else -> PAD_TOKEN_ID
+        // Use proper WordPiece tokenization if available
+        val (inputIds, attentionMask, tokenTypeIds) = if (tokenizerInitialized && tokenizer != null) {
+            val output = tokenizer!!.tokenize(text, addSpecialTokens = true, maxLength = MAX_SEQ_LENGTH)
+            Triple(output.inputIds, output.attentionMask, output.tokenTypeIds)
+        } else {
+            // Fallback to simple tokenization if WordPiece tokenizer not available
+            val tokens = simpleFallbackTokenize(text)
+            val specialTokenIds = tokenizer?.getSpecialTokenIds()
+            val padId = specialTokenIds?.pad?.toLong() ?: 0L
+            val clsId = specialTokenIds?.cls?.toLong() ?: 101L
+            val sepId = specialTokenIds?.sep?.toLong() ?: 102L
+            
+            val ids = LongArray(MAX_SEQ_LENGTH) { i ->
+                when {
+                    i == 0 -> clsId
+                    i < tokens.size + 1 -> tokens[i - 1]
+                    i == tokens.size + 1 -> sepId
+                    else -> padId
+                }
             }
+            val mask = LongArray(MAX_SEQ_LENGTH) { i ->
+                if (i <= tokens.size + 1) 1L else 0L
+            }
+            val types = LongArray(MAX_SEQ_LENGTH) { 0L }
+            Triple(ids, mask, types)
         }
-        
-        val attentionMask = LongArray(MAX_SEQ_LENGTH) { i ->
-            if (i <= tokens.size + 1) 1L else 0L
-        }
-        
-        val tokenTypeIds = LongArray(MAX_SEQ_LENGTH) { 0L }
         
         // Create ONNX tensors
         val shape = longArrayOf(1, MAX_SEQ_LENGTH.toLong())
         
-        val inputIdsTensor = OnnxTensor.createTensor(env, LongBuffer.wrap(inputIds), shape)
-        val attentionMaskTensor = OnnxTensor.createTensor(env, LongBuffer.wrap(attentionMask), shape)
-        val tokenTypeIdsTensor = OnnxTensor.createTensor(env, LongBuffer.wrap(tokenTypeIds), shape)
+        // Note: Using createTensor directly with arrays instead of LongBuffer for compatibility
+        // The LongBuffer signature isn't available in all versions of the Android ONNX runtime binding
+        // Using `createTensor(env, Object)` which handles primitive arrays.
+        // For batch size 1 and explicit shape, we might need nested arrays if pure reshape isn't available.
+        // [1, MAX_SEQ_LENGTH]
+        val inputIds2D = Array(1) { inputIds }
+        val attentionMask2D = Array(1) { attentionMask }
+        val tokenTypeIds2D = Array(1) { tokenTypeIds }
+
+        val inputIdsTensor = OnnxTensor.createTensor(env, inputIds2D)
+        val attentionMaskTensor = OnnxTensor.createTensor(env, attentionMask2D)
+        val tokenTypeIdsTensor = OnnxTensor.createTensor(env, tokenTypeIds2D)
         
         try {
             val inputs = mapOf(
@@ -304,6 +333,9 @@ class EmbeddingService(private val context: Context) {
             // Extract embedding from output with safe type checking
             // MiniLM outputs sentence embedding directly or we need to mean pool
             val outputValue = results[0].value
+            
+            // Calculate valid length for mean pooling
+            val validLength = attentionMask.count { it == 1L }
             
             val embeddings = try {
                 when (outputValue) {
@@ -346,21 +378,11 @@ class EmbeddingService(private val context: Context) {
     }
     
     /**
-     * Simple tokenization - converts text to token IDs
-     * 
-     * ⚠️ IMPORTANT: This is a TEMPORARY simplified implementation using hash-based IDs.
-     * For production use, replace with a proper WordPiece tokenizer that matches 
-     * the all-MiniLM-L6-v2 vocabulary. The current implementation will produce
-     * embeddings that do not semantically match those from the actual model.
-     * 
-     * Recommended solutions:
-     * 1. Use HuggingFace's tokenizers library with ONNX
-     * 2. Port the Python tokenizer to Kotlin
-     * 3. Use a pre-tokenized vocab file
+     * Simple fallback tokenization when WordPiece tokenizer is not available
+     * Uses hash-based IDs for backwards compatibility
      */
-    private fun simpleTokenize(text: String): LongArray {
+    private fun simpleFallbackTokenize(text: String): LongArray {
         // Simple word-based tokenization with hash-based IDs
-        // WARNING: This produces embeddings that won't match true MiniLM semantics
         val words = text.lowercase()
             .replace(Regex("[^a-z0-9\\s]"), " ")
             .split("\\s+".toRegex())
@@ -369,7 +391,6 @@ class EmbeddingService(private val context: Context) {
         
         return words.map { word ->
             // Map word to token ID using hash (simplified)
-            // Real implementation would use vocabulary lookup
             (Math.abs(word.hashCode()) % 30000 + 1000).toLong()
         }.toLongArray()
     }
@@ -528,6 +549,11 @@ class EmbeddingService(private val context: Context) {
     fun isUsingRealEmbeddings(): Boolean = activeBackend != EmbeddingBackend.FALLBACK
     
     /**
+     * Check if using proper WordPiece tokenization
+     */
+    fun isUsingRealTokenizer(): Boolean = tokenizerInitialized
+    
+    /**
      * Get the active backend name
      */
     fun getActiveBackend(): EmbeddingBackend = activeBackend
@@ -540,8 +566,10 @@ class EmbeddingService(private val context: Context) {
             totalEmbeddings = totalEmbeddings,
             averageTimeMs = averageTimeMs,
             isRealEmbeddings = isUsingRealEmbeddings(),
+            isRealTokenizer = isUsingRealTokenizer(),
             embeddingDimension = getEmbeddingDimension(),
-            backend = activeBackend.name
+            backend = activeBackend.name,
+            vocabSize = tokenizer?.getVocabSize() ?: 0
         )
     }
     
@@ -549,8 +577,10 @@ class EmbeddingService(private val context: Context) {
         val totalEmbeddings: Int,
         val averageTimeMs: Double,
         val isRealEmbeddings: Boolean,
+        val isRealTokenizer: Boolean,
         val embeddingDimension: Int,
-        val backend: String
+        val backend: String,
+        val vocabSize: Int
     )
     
     /**

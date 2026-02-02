@@ -81,6 +81,10 @@ const ModelManager = require('./model_manager');
 // Collective Mode
 const { CollectiveCoordinator, CollectiveBrain, CollectiveClient } = require('./collective');
 
+// Identity Module
+const { IdentityManager } = require('./identity/manager');
+const { handleIdentityRoutes } = require('./identity/routes');
+
 // Initialize Components with TPU optimization
 const host = new AmphibianHost();
 const localBrain = new LocalBrain({
@@ -93,16 +97,20 @@ const memory = new ConversationMemory(50); // Extended memory for complex tasks
 // Initialize Landseek Features
 const personalities = new PersonalityManager(path.join(STORAGE_PATH, 'personalities.json'));
 const documents = new DocumentManager(path.join(STORAGE_PATH, 'documents'));
+const identityManager = new IdentityManager(path.join(STORAGE_PATH, 'identity'));
+
 const commandProcessor = new CommandProcessor({
     personalities,
     documents,
     localBrain,
-    memory
+    memory,
+    identityManager
 });
 
 // Load saved state
 personalities.load();
 documents.loadDocumentIndex();
+identityManager.load();
 
 // Android Bridge Callback (injected via JNI in production)
 let androidToolCallback = global.androidBridgeCallback || async function(toolName, args) {
@@ -423,7 +431,12 @@ async function streamCollectiveResponse(task, onLog) {
 }
 
 // Start Server
-const server = http.createServer((req, res) => {
+const server = http.createServer(async (req, res) => {
+    // Try to handle identity routes first
+    if (await handleIdentityRoutes(req, res, identityManager)) {
+        return;
+    }
+
     res.writeHead(200);
     res.end('Amphibian Bridge Active 🐸');
 });

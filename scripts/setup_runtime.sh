@@ -15,9 +15,6 @@ echo "Architecture: $ARCH"
 echo "Target: $TARGET_DIR"
 echo ""
 
-# Create target directory
-mkdir -p "$TARGET_DIR"
-
 create_placeholder() {
     cat > "$TARGET_DIR/node" << 'EOF'
 #!/system/bin/sh
@@ -35,6 +32,9 @@ exit 1
 EOF
     chmod +x "$TARGET_DIR/node"
 }
+
+# Create target directory
+mkdir -p "$TARGET_DIR"
 
 # Check if we're on a system that can build for Android
 if command -v ndk-build &> /dev/null; then
@@ -96,4 +96,3 @@ echo ""
 echo "Next steps:"
 echo "  1. Run ./scripts/bundle_bridge.sh to package the bridge code"
 echo "  2. Run cd android && ./gradlew assembleDebug to build the APK"
-

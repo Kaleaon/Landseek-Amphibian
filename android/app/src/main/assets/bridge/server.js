@@ -14,6 +14,7 @@
  * - Document Upload & Analysis
  * - P2P Room Hosting/Joining
  * - Command System (/help, /tools, /upload, etc.)
+ * - Collective Mode: Pool AI across multiple devices for distributed inference
  */
 
 const WebSocket = require('ws');
@@ -46,7 +47,8 @@ const EVENTS = {
     STREAM_CHUNK: 'STREAM_CHUNK',
     AI_RESPONSE: 'AI_RESPONSE',
     COMMAND_RESULT: 'COMMAND_RESULT',
-    P2P_STATUS: 'P2P_STATUS'
+    P2P_STATUS: 'P2P_STATUS',
+    COLLECTIVE_STATUS: 'COLLECTIVE_STATUS'
 };
 
 // State
@@ -56,6 +58,12 @@ let currentTaskAborted = false;
 let privateChat = null; // { personality, history }
 let p2pHost = null;
 let p2pClient = null;
+
+// Collective Mode State
+let collectiveCoordinator = null;
+let collectiveClient = null;
+let collectiveBrain = null;
+let useCollectiveForNextInference = false;
 
 // Core Components
 const AmphibianHost = require('./mcp_host');
@@ -68,6 +76,14 @@ const { PersonalityManager } = require('./personalities');
 const { DocumentManager } = require('./documents');
 const { CommandProcessor } = require('./commands');
 const { P2PHost, P2PClient } = require('./p2p');
+const ModelManager = require('./model_manager');
+
+// Collective Mode
+const { CollectiveCoordinator, CollectiveBrain, CollectiveClient } = require('./collective');
+
+// Identity Module
+const { IdentityManager } = require('./identity/manager');
+const { handleIdentityRoutes } = require('./identity/routes');
 
 // Initialize Components with TPU optimization
 const host = new AmphibianHost();
@@ -81,16 +97,20 @@ const memory = new ConversationMemory(50); // Extended memory for complex tasks
 // Initialize Landseek Features
 const personalities = new PersonalityManager(path.join(STORAGE_PATH, 'personalities.json'));
 const documents = new DocumentManager(path.join(STORAGE_PATH, 'documents'));
+const identityManager = new IdentityManager(path.join(STORAGE_PATH, 'identity'));
+
 const commandProcessor = new CommandProcessor({
     personalities,
     documents,
     localBrain,
-    memory
+    memory,
+    identityManager
 });
 
 // Load saved state
 personalities.load();
 documents.loadDocumentIndex();
+identityManager.load();
 
 // Android Bridge Callback (injected via JNI in production)
 let androidToolCallback = global.androidBridgeCallback || async function(toolName, args) {
@@ -104,6 +124,11 @@ let androidToolCallback = global.androidBridgeCallback || async function(toolNam
         simulated: true  // Flag to indicate this was a simulated response
     };
 };
+
+// Initialize Model Manager
+const modelManager = new ModelManager(async (tool, args) => {
+    return androidToolCallback(tool, args);
+});
 
 // Start MCP Servers (Brain Modules)
 async function startBrains() {
@@ -215,16 +240,48 @@ const agent = {
                     resultText = await executeAndroidTool(task, onLog);
                     break;
 
+                case 'collective':
+                    // Collective distributed inference
+                    if (collectiveBrain && await collectiveBrain.isAvailable()) {
+                        onLog('🌐 Thinking with collective brain...', 'info');
+                        if (options.stream) {
+                            resultText = await streamCollectiveResponse(task, onLog);
+                        } else {
+                            const messages = memory.getHistory();
+                            const response = await collectiveBrain.chat(messages);
+                            resultText = response.content || "Collective inference failed.";
+                        }
+                    } else {
+                        // Fallback to local
+                        onLog('⚠️ Collective not available, using local brain...', 'info');
+                        const messages = memory.getHistory();
+                        const response = await localBrain.chat(messages);
+                        resultText = response.content || "I apologize, I couldn't generate a response.";
+                    }
+                    break;
+
                 default:
                     // Local TPU Brain for general chat/reasoning
-                    onLog('💭 Thinking with local TPU...', 'info');
+                    // Check if collective should be used
+                    const brain = getActiveBrain();
+                    const isCollective = brain === collectiveBrain;
+
+                    if (isCollective) {
+                        onLog('🌐 Thinking with collective brain...', 'info');
+                    } else {
+                        onLog('💭 Thinking with local TPU...', 'info');
+                    }
                     
                     // Check for streaming preference
                     if (options.stream) {
-                        resultText = await streamLocalResponse(task, onLog);
+                        if (isCollective) {
+                            resultText = await streamCollectiveResponse(task, onLog);
+                        } else {
+                            resultText = await streamLocalResponse(task, onLog);
+                        }
                     } else {
                         const messages = memory.getHistory();
-                        const response = await localBrain.chat(messages);
+                        const response = await brain.chat(messages);
                         resultText = response.content || "I apologize, I couldn't generate a response.";
                     }
                     break;
@@ -349,8 +406,37 @@ async function streamLocalResponse(task, onLog) {
     return fullResponse || "I apologize, I couldn't generate a response.";
 }
 
+/**
+ * Stream response from collective brain
+ */
+async function streamCollectiveResponse(task, onLog) {
+    if (!collectiveBrain) {
+        onLog('⚠️ Collective brain not available', 'error');
+        return "Collective brain not available.";
+    }
+
+    const messages = memory.getHistory();
+    let fullResponse = '';
+
+    try {
+        for await (const chunk of collectiveBrain.chatStream(messages)) {
+            fullResponse += chunk;
+            send(EVENTS.STREAM_CHUNK, { text: chunk, collective: true });
+        }
+    } catch (err) {
+        onLog(`Collective stream error: ${err.message}`, 'error');
+    }
+
+    return fullResponse || "Collective inference failed.";
+}
+
 // Start Server
-const server = http.createServer((req, res) => {
+const server = http.createServer(async (req, res) => {
+    // Try to handle identity routes first
+    if (await handleIdentityRoutes(req, res, identityManager)) {
+        return;
+    }
+    
     res.writeHead(200);
     res.end('Amphibian Bridge Active 🐸');
 });
@@ -529,6 +615,71 @@ async function handleCommandAction(action, data) {
         case 'recall':
             const recallResult = await androidToolCallback('recall', { query: data.query });
             send(EVENTS.COMMAND_RESULT, { message: recallResult.output || 'No memories found.' });
+            break;
+
+        case 'list_models':
+            try {
+                const list = await modelManager.listModels();
+                let msg = "**Available Models:**\n";
+                list.available.forEach(m => {
+                    const status = m.installed ? "✅ Installed" : (m.isDownloading ? `⬇️ ${m.progress}%` : "☁️ Cloud");
+                    const size = m.size ? formatSize(m.size) : 'Unknown size';
+                    msg += `- **${m.name}** (${m.id})\n  ${status} | ${size}\n  Filename: \`${m.filename}\`\n`;
+                });
+                send(EVENTS.COMMAND_RESULT, { message: msg });
+            } catch (e) {
+                send(EVENTS.ERROR, { message: `Failed to list models: ${e.message}` });
+            }
+            break;
+            
+        case 'download_model':
+            send(EVENTS.COMMAND_RESULT, { message: `⬇️ Starting download for ${data.modelId}...` });
+            modelManager.downloadModel(data.modelId, (progress) => {
+                 // Optional: Send progress updates if needed, but might spam
+            }).then(() => {
+                 send(EVENTS.COMMAND_RESULT, { message: `✅ Download complete for ${data.modelId}` });
+            }).catch(e => {
+                 send(EVENTS.ERROR, { message: `Download failed: ${e.message}` });
+            });
+            break;
+            
+        case 'switch_model':
+            try {
+                const res = await modelManager.switchModel(data.modelName);
+                send(EVENTS.COMMAND_RESULT, { message: res.success ? `✅ Switched to ${data.modelName}` : `❌ Failed: ${res.output}` });
+            } catch (e) {
+                send(EVENTS.ERROR, { message: `Switch failed: ${e.message}` });
+            }
+            break;
+
+        // ============================================
+        // COLLECTIVE MODE ACTIONS
+        // ============================================
+
+        case 'start_collective':
+            await startCollective(data.port, data.poolName);
+            break;
+
+        case 'join_collective':
+            await joinCollective(data.shareCode);
+            break;
+
+        case 'leave_collective':
+            await leaveCollective();
+            break;
+
+        case 'collective_status':
+            sendCollectiveStatus();
+            break;
+
+        case 'set_capability':
+            if (collectiveClient) {
+                collectiveClient.updateCapability(data.capability);
+            }
+            break;
+
+        case 'use_collective':
+            useCollectiveForNextInference = true;
             break;
     }
 }
@@ -723,10 +874,242 @@ async function leaveP2P() {
     send(EVENTS.P2P_STATUS, { status: 'disconnected' });
 }
 
+// ============================================
+// COLLECTIVE MODE FUNCTIONS
+// ============================================
+
+/**
+ * Start a collective pool as coordinator
+ */
+async function startCollective(port, poolName) {
+    // Stop existing collective if any
+    await leaveCollective();
+
+    collectiveCoordinator = new CollectiveCoordinator({ port, poolName });
+
+    try {
+        const info = await collectiveCoordinator.start();
+
+        // Create collective brain for this coordinator
+        collectiveBrain = new CollectiveBrain(collectiveCoordinator);
+
+        // Register collective brain with router
+        router.register('collective', true);
+
+        send(EVENTS.COLLECTIVE_STATUS, {
+            mode: 'coordinator',
+            status: 'running',
+            poolName: info.poolName,
+            port: info.port,
+            shareCode: info.shareCode,
+            localIPs: info.localIPs,
+            devices: 0
+        });
+
+        send(EVENTS.COMMAND_RESULT, {
+            message: `🌐 Collective pool started!\n` +
+                     `   Pool: ${info.poolName}\n` +
+                     `   Port: ${info.port}\n` +
+                     `   Share code: ${info.shareCode}\n` +
+                     `   Others can join with: /pool ${info.shareCode}`
+        });
+
+        // Set up event handlers
+        collectiveCoordinator.on('device_joined', (device) => {
+            send(EVENTS.LOG, { text: `🟢 ${device.name} joined the collective (${device.capability})`, type: 'info' });
+            sendCollectiveStatus();
+        });
+
+        collectiveCoordinator.on('device_left', (device) => {
+            send(EVENTS.LOG, { text: `🔴 ${device.name} left the collective`, type: 'info' });
+            sendCollectiveStatus();
+        });
+
+        collectiveCoordinator.on('task_completed', ({ taskId }) => {
+            send(EVENTS.LOG, { text: `✅ Collective task ${taskId} completed`, type: 'info' });
+        });
+
+        collectiveCoordinator.on('task_failed', ({ taskId }) => {
+            send(EVENTS.LOG, { text: `❌ Collective task ${taskId} failed`, type: 'error' });
+        });
+
+        console.log(`🌐 Collective coordinator started on port ${port}`);
+
+    } catch (e) {
+        send(EVENTS.ERROR, { message: `Failed to start collective: ${e.message}` });
+    }
+}
+
+/**
+ * Join an existing collective pool
+ */
+async function joinCollective(shareCode) {
+    // Stop existing collective if any
+    await leaveCollective();
+
+    collectiveClient = new CollectiveClient({
+        localBrain,
+        deviceName: `Amphibian_${Math.random().toString(36).substring(2, 6)}`,
+        capability: detectDeviceCapability(),
+        model: TPU_MODEL
+    });
+
+    try {
+        const info = await collectiveClient.connect(shareCode);
+
+        send(EVENTS.COLLECTIVE_STATUS, {
+            mode: 'worker',
+            status: 'connected',
+            poolName: info.poolName,
+            deviceId: info.deviceId,
+            totalDevices: info.totalDevices
+        });
+
+        send(EVENTS.COMMAND_RESULT, {
+            message: `✅ Joined collective pool "${info.poolName}"!\n` +
+                     `   Device ID: ${info.deviceId}\n` +
+                     `   Total devices: ${info.totalDevices}\n` +
+                     `   Your device is now contributing to collective inference.`
+        });
+
+        // Set up event handlers
+        collectiveClient.on('device_joined', (device) => {
+            send(EVENTS.LOG, { text: `🟢 ${device.name} joined the collective`, type: 'info' });
+        });
+
+        collectiveClient.on('device_left', ({ deviceName }) => {
+            send(EVENTS.LOG, { text: `🔴 ${deviceName} left the collective`, type: 'info' });
+        });
+
+        collectiveClient.on('disconnected', () => {
+            send(EVENTS.COLLECTIVE_STATUS, { mode: 'worker', status: 'disconnected' });
+            send(EVENTS.LOG, { text: '🔴 Disconnected from collective pool', type: 'warning' });
+        });
+
+        console.log(`📱 Joined collective as worker: ${info.deviceId}`);
+
+    } catch (e) {
+        send(EVENTS.ERROR, { message: `Failed to join collective: ${e.message}` });
+    }
+}
+
+/**
+ * Leave collective pool
+ */
+async function leaveCollective() {
+    if (collectiveCoordinator) {
+        await collectiveCoordinator.stop();
+        collectiveCoordinator = null;
+        collectiveBrain = null;
+        console.log('🛑 Collective coordinator stopped');
+    }
+
+    if (collectiveClient) {
+        collectiveClient.disconnect();
+        collectiveClient = null;
+        console.log('👋 Left collective pool');
+    }
+
+    send(EVENTS.COLLECTIVE_STATUS, { mode: null, status: 'inactive' });
+}
+
+/**
+ * Send collective status to UI
+ */
+function sendCollectiveStatus() {
+    if (collectiveCoordinator) {
+        const status = collectiveCoordinator.getStatus();
+        send(EVENTS.COLLECTIVE_STATUS, {
+            mode: 'coordinator',
+            status: 'running',
+            poolName: status.poolName,
+            devices: status.devices,
+            deviceList: status.deviceList,
+            queuedTasks: status.queuedTasks,
+            activeTasks: status.activeTasks
+        });
+
+        // Also send readable message
+        const deviceInfo = status.deviceList.map(d =>
+            `   • ${d.name} (${d.capability}) - ${d.completedTasks} tasks`
+        ).join('\n') || '   No devices connected';
+
+        send(EVENTS.COMMAND_RESULT, {
+            message: `**🌐 Collective Status (Coordinator)**\n` +
+                     `Pool: ${status.poolName}\n` +
+                     `Devices: ${status.devices}\n` +
+                     `Queued Tasks: ${status.queuedTasks}\n` +
+                     `Active Tasks: ${status.activeTasks}\n\n` +
+                     `**Connected Devices:**\n${deviceInfo}`
+        });
+
+    } else if (collectiveClient) {
+        const status = collectiveClient.getStatus();
+        send(EVENTS.COLLECTIVE_STATUS, {
+            mode: 'worker',
+            status: status.isConnected ? 'connected' : 'disconnected',
+            deviceId: status.deviceId,
+            deviceName: status.deviceName,
+            capability: status.capability,
+            activeTasks: status.activeTasks,
+            coordinator: status.coordinator
+        });
+
+        send(EVENTS.COMMAND_RESULT, {
+            message: `**📱 Collective Status (Worker)**\n` +
+                     `Pool: ${status.coordinator?.poolName || 'Unknown'}\n` +
+                     `Device: ${status.deviceName} (${status.capability})\n` +
+                     `Status: ${status.isConnected ? '🟢 Connected' : '🔴 Disconnected'}\n` +
+                     `Active Tasks: ${status.activeTasks}`
+        });
+
+    } else {
+        send(EVENTS.COLLECTIVE_STATUS, { mode: null, status: 'inactive' });
+        send(EVENTS.COMMAND_RESULT, {
+            message: `**Collective Mode Inactive**\n\n` +
+                     `Use \`/collective\` to start a pool, or \`/pool <code>\` to join one.`
+        });
+    }
+}
+
+/**
+ * Detect device capability based on environment
+ */
+function detectDeviceCapability() {
+    // In production, this would detect TPU/NPU availability
+    // For now, return medium as default
+    if (process.env.TPU_AVAILABLE === 'true') {
+        return 'tpu';
+    }
+    if (process.env.DEVICE_CAPABILITY) {
+        return process.env.DEVICE_CAPABILITY;
+    }
+    return 'medium';
+}
+
+/**
+ * Get the active brain (collective or local)
+ */
+function getActiveBrain() {
+    if (useCollectiveForNextInference && collectiveBrain) {
+        useCollectiveForNextInference = false; // Reset after use
+        return collectiveBrain;
+    }
+    return localBrain;
+}
+
 function send(type, payload) {
     if (activeSocket && activeSocket.readyState === WebSocket.OPEN) {
         activeSocket.send(JSON.stringify({ type, payload }));
     }
+}
+
+function formatSize(bytes) {
+    if (bytes === 0) return '0 B';
+    const k = 1024;
+    const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
 }
 
 server.listen(PORT, '127.0.0.1', () => {

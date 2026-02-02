@@ -78,9 +78,10 @@ fun AmphibianApp(service: AmphibianCoreService?) {
 
     Column(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
         // Header
-        SmallTopAppBar(
+        @OptIn(ExperimentalMaterial3Api::class)
+        TopAppBar(
             title = { Text("Landseek Amphibian") },
-            colors = TopAppBarDefaults.smallTopAppBarColors(
+            colors = TopAppBarDefaults.topAppBarColors(
                 containerColor = MaterialTheme.colorScheme.surfaceVariant
             )
         )
