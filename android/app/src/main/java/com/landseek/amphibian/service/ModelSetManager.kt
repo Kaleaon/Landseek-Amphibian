@@ -202,7 +202,6 @@ class ModelSetManager(private val context: Context) {
             val startTime = System.currentTimeMillis()
             
             // Initialize LLM with this model
-            val success = llmService.initialize()
             val llm = llmService ?: LocalLLMService(context).also { llmService = it }
             val success = llm.initialize()
             

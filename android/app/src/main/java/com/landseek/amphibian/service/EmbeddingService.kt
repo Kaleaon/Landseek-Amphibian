@@ -278,7 +278,6 @@ class EmbeddingService(private val context: Context) {
     }
     
     /**
-     * Generate embedding using ONNX MiniLM model
      * Generate embedding using ONNX MiniLM model with proper WordPiece tokenization
      */
     private fun embedWithOnnx(text: String): FloatArray {
