@@ -91,7 +91,7 @@ fun AmphibianApp(service: AmphibianCoreService?) {
             modifier = Modifier.weight(1f).padding(8.dp),
             reverseLayout = true
         ) {
-            items(messages.reversed()) { msg ->
+            items(messages.asReversed()) { msg ->
                 ChatBubble(msg)
             }
         }
