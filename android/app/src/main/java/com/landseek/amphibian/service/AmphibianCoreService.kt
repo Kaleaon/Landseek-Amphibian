@@ -153,12 +153,12 @@ class AmphibianCoreService : Service() {
                 updateNotification("Initializing $backendName...")
                 
                 // Initialize all services in parallel
-                val llmJob = async { llmService.initialize() }
-                val ragJob = async { ragService.initialize() }
-                val ttsJob = async { ttsService.initialize() }
-                val docJob = async { documentParser.initialize() }
-                val visionJob = async { visionService.initialize() }
-                val modelSetJob = async { modelSetManager.initialize() }
+                val llmJob: Deferred<Boolean> = async { llmService.initialize() }
+                val ragJob: Deferred<Boolean> = async { ragService.initialize() }
+                val ttsJob: Deferred<Boolean> = async { ttsService.initialize() }
+                val docJob: Deferred<Boolean> = async { documentParser.initialize() }
+                val visionJob: Deferred<Boolean> = async { visionService.initialize() }
+                val modelSetJob: Deferred<Boolean> = async { modelSetManager.initialize() }
                 
                 bootstrapRuntime()
                 startNodeProcess()

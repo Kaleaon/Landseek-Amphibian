@@ -18,17 +18,13 @@
                           C71,55 72,52 72,48
                           C72,38 64,30 54,30Z"/>
     <!-- Left eye -->
-    <circle
+    <path
         android:fillColor="#1DB954"
-        android:centerX="46"
-        android:centerY="44"
-        android:radius="4"/>
+        android:pathData="M 42,44 A 4,4 0 1,0 50,44 A 4,4 0 1,0 42,44"/>
     <!-- Right eye -->
-    <circle
+    <path
         android:fillColor="#1DB954"
-        android:centerX="62"
-        android:centerY="44"
-        android:radius="4"/>
+        android:pathData="M 58,44 A 4,4 0 1,0 66,44 A 4,4 0 1,0 58,44"/>
     <!-- Smile -->
     <path
         android:strokeColor="#1DB954"

@@ -315,24 +315,24 @@ class EmbeddingService(private val context: Context) {
                                 // Need to mean pool over sequence - safely cast with check
                                 @Suppress("UNCHECKED_CAST")
                                 val sequenceOutput = (firstElement as? Array<FloatArray>)
-                                    ?: return@withContext generateFallbackEmbedding(text)
+                                    ?: return generateFallbackEmbedding(text)
                                 meanPool(sequenceOutput, tokens.size + 2) // +2 for CLS and SEP
                             }
                             else -> {
                                 Log.w(TAG, "Unexpected inner output type: ${firstElement?.javaClass}")
-                                return@withContext generateFallbackEmbedding(text)
+                                return generateFallbackEmbedding(text)
                             }
                         }
                     }
                     is FloatArray -> outputValue
                     else -> {
                         Log.w(TAG, "Unexpected ONNX output type: ${outputValue?.javaClass}")
-                        return@withContext generateFallbackEmbedding(text)
+                        return generateFallbackEmbedding(text)
                     }
                 }
             } catch (e: ClassCastException) {
                 Log.w(TAG, "ONNX output cast failed: ${e.message}")
-                return@withContext generateFallbackEmbedding(text)
+                return generateFallbackEmbedding(text)
             }
             
             // Normalize
@@ -381,14 +381,17 @@ class EmbeddingService(private val context: Context) {
         val dim = sequenceOutput[0].size
         val result = FloatArray(dim)
         
-        for (i in 0 until validLength.coerceAtMost(sequenceOutput.size)) {
+        val limit = validLength.coerceAtMost(sequenceOutput.size)
+        for (i in 0 until limit) {
+            val row = sequenceOutput[i]
             for (j in 0 until dim) {
-                result[j] += sequenceOutput[i][j]
+                result[j] = result[j] + row[j]
             }
         }
         
+        val divisor = validLength.toFloat()
         for (j in 0 until dim) {
-            result[j] /= validLength
+            result[j] = result[j] / divisor
         }
         
         return result
@@ -475,7 +478,8 @@ class EmbeddingService(private val context: Context) {
             for (i in vec.indices) {
                 val bit = (hash shr (i % 32)) and 1
                 val sign = if ((hash shr ((i + wordIdx) % 32)) and 1 == 1) 1f else -1f
-                vec[i] += bit.toFloat() * sign * (1f / (wordIdx + 1))
+                val value = vec[i] + bit.toFloat() * sign * (1f / (wordIdx + 1))
+                vec[i] = value
             }
         }
         
