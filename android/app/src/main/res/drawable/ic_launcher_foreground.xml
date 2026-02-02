@@ -20,16 +20,8 @@
     <!-- Left eye -->
     <path
         android:fillColor="#1DB954"
-        android:pathData="M 42,44 a 4,4 0 1,0 8,0 a 4,4 0 1,0 -8,0"/>
-    <!-- Right eye -->
-    <path
-        android:fillColor="#1DB954"
-        android:pathData="M 58,44 a 4,4 0 1,0 8,0 a 4,4 0 1,0 -8,0"/>
-    <!-- Left eye (Circle centered at 46,44 radius 4) -->
-    <path
-        android:fillColor="#1DB954"
         android:pathData="M50,44 A4,4 0 1,1 42,44 A4,4 0 1,1 50,44"/>
-    <!-- Right eye (Circle centered at 62,44 radius 4) -->
+    <!-- Right eye -->
     <path
         android:fillColor="#1DB954"
         android:pathData="M66,44 A4,4 0 1,1 58,44 A4,4 0 1,1 66,44"/>

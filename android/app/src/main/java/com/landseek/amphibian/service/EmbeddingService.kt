@@ -310,7 +310,7 @@ class EmbeddingService(private val context: Context) {
             Triple(output.inputIds, output.attentionMask, output.tokenTypeIds)
         } else {
             // Fallback to simple tokenization if WordPiece tokenizer not available
-            val tokens = simpleFallbackTokenize(text)
+            val tokens = simpleTokenize(text)
             val specialTokenIds = tokenizer?.getSpecialTokenIds()
             val padId = specialTokenIds?.pad?.toLong() ?: 0L
             val clsId = specialTokenIds?.cls?.toLong() ?: 101L
@@ -407,14 +407,11 @@ class EmbeddingService(private val context: Context) {
      * 1. Use HuggingFace's tokenizers library with ONNX
      * 2. Port the Python tokenizer to Kotlin
      * 3. Use a pre-tokenized vocab file
-     */
-    private fun simpleTokenize(text: String): LongArray {
-        // Simple word-based tokenization with hash-based IDs
-        // WARNING: This produces embeddings that won't match true MiniLM semantics
+     *
      * Simple fallback tokenization when WordPiece tokenizer is not available
      * Uses hash-based IDs for backwards compatibility
      */
-    private fun simpleFallbackTokenize(text: String): LongArray {
+    private fun simpleTokenize(text: String): LongArray {
         // Simple word-based tokenization with hash-based IDs
         val words = text.lowercase()
             .replace(Regex("[^a-z0-9\\s]"), " ")
@@ -438,14 +435,12 @@ class EmbeddingService(private val context: Context) {
         
         for (i in 0 until validLength.coerceAtMost(sequenceOutput.size)) {
             for (j in 0 until dim) {
-                result.set(j, result.get(j) + sequenceOutput[i][j])
                 result[j] += sequenceOutput[i][j]
             }
         }
         
         for (j in 0 until dim) {
-            result.set(j, result.get(j) / validLength.toFloat())
-            result[j] /= validLength
+            result[j] /= validLength.toFloat()
         }
         
         return result
@@ -463,7 +458,6 @@ class EmbeddingService(private val context: Context) {
         
         if (norm > 0) {
             for (i in vec.indices) {
-                vec.set(i, vec.get(i) / norm)
                 vec[i] /= norm
             }
         }
@@ -603,8 +597,6 @@ class EmbeddingService(private val context: Context) {
             totalEmbeddings = totalEmbeddings,
             averageTimeMs = averageTimeMs,
             isRealEmbeddings = isUsingRealEmbeddings(),
-            embeddingDimension = getEmbeddingDimension(),
-            backend = activeBackend.name
             isRealTokenizer = isUsingRealTokenizer(),
             embeddingDimension = getEmbeddingDimension(),
             backend = activeBackend.name,
@@ -616,8 +608,6 @@ class EmbeddingService(private val context: Context) {
         val totalEmbeddings: Int,
         val averageTimeMs: Double,
         val isRealEmbeddings: Boolean,
-        val embeddingDimension: Int,
-        val backend: String
         val isRealTokenizer: Boolean,
         val embeddingDimension: Int,
         val backend: String,

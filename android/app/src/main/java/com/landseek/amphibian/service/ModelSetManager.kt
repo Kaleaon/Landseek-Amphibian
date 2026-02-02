@@ -25,10 +25,6 @@ import java.io.File
  * @see OptimizedModelSets
  * @see https://github.com/Siddhesh2377/ToolNeuron
  */
-class ModelSetManager(
-    private val context: Context,
-    private val llmService: LocalLLMService
-) {
 class ModelSetManager(private val context: Context) {
 
     private val TAG = "AmphibianModelSetMgr"
@@ -128,7 +124,6 @@ class ModelSetManager(private val context: Context) {
      * Scan for available models on device
      */
     fun scanAvailableModels() {
-    private fun scanAvailableModels() {
         val modelsDir = File(context.filesDir, "models")
         if (!modelsDir.exists()) {
             modelsDir.mkdirs()

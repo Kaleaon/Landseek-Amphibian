@@ -19,8 +19,6 @@ import com.landseek.amphibian.service.LocalRAGService
 import com.landseek.amphibian.service.ModelSetManager
 import com.landseek.amphibian.service.OptimizedModelSets
 import com.landseek.amphibian.service.P2PSyncService
-import org.json.JSONArray
-import com.landseek.amphibian.service.P2PSyncService
 
 /**
  * AndroidToolManager
@@ -28,12 +26,6 @@ import com.landseek.amphibian.service.P2PSyncService
  * Exposes Android system capabilities as executable tools for the Agent.
  * Handles permission checks and native API calls.
  */
-class AndroidToolManager(
-    private val context: Context,
-    private val llmService: LocalLLMService,
-    private val ragService: LocalRAGService,
-    private val modelSetManager: ModelSetManager
-) {
 class AndroidToolManager(private val context: Context) {
 
     private val TAG = "AmphibianTools"

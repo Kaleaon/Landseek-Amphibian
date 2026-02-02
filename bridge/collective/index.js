@@ -33,7 +33,6 @@ const {
 module.exports = {
     CollectiveCoordinator,
     CollectiveBrain,
-    CollectiveClient
     CollectiveClient,
     IdentityManager,
     CollectiveIdentity,
