@@ -28,6 +28,7 @@ import java.nio.LongBuffer
  * Features:
  * - Real semantic embeddings via all-MiniLM-L6-v2 (ToolNeuron pattern)
  * - TPU/GPU acceleration on Pixel devices via MediaPipe
+ * - Proper WordPiece tokenization for ONNX backend
  * - Batch embedding support
  * - Automatic hardware detection and optimization
  * - Graceful fallback chain
@@ -53,6 +54,10 @@ class EmbeddingService(private val context: Context) {
     // TPU capability service for hardware detection
     private val tpuService = TPUCapabilityService(context)
     
+    // WordPiece tokenizer for proper ONNX tokenization
+    private var tokenizer: WordPieceTokenizer? = null
+    private var tokenizerInitialized = false
+    
     // Model configuration
     // MiniLM - ToolNeuron's recommended model (384-dim)
     private val MINILM_MODEL_FILENAME = "all-MiniLM-L6-v2.onnx"
@@ -71,6 +76,8 @@ class EmbeddingService(private val context: Context) {
     private val PAD_TOKEN_ID = 0L
     private val CLS_TOKEN_ID = 101L
     private val SEP_TOKEN_ID = 102L
+    // Max sequence length for tokenization
+    private val MAX_SEQ_LENGTH = 128
     
     // Performance tracking
     private var totalEmbeddings = 0
@@ -95,6 +102,16 @@ class EmbeddingService(private val context: Context) {
         val caps = tpuService.detectCapabilities()
         Log.d(TAG, "Initializing embeddings for ${caps.deviceTier} device")
         
+        // Initialize tokenizer first
+        tokenizer = WordPieceTokenizer(context)
+        tokenizerInitialized = tokenizer?.initialize() ?: false
+        
+        if (tokenizerInitialized) {
+            Log.i(TAG, "✅ WordPiece tokenizer initialized with ${tokenizer?.getVocabSize()} tokens")
+        } else {
+            Log.w(TAG, "⚠️ WordPiece tokenizer initialization failed, will use fallback")
+        }
+        
         // Try ONNX MiniLM first (ToolNeuron approach)
         if (tryInitializeOnnx()) {
             activeBackend = EmbeddingBackend.ONNX_MINILM
@@ -106,6 +123,7 @@ class EmbeddingService(private val context: Context) {
                 ║ Model: all-MiniLM-L6-v2                                    ║
                 ║ Dimensions: $MINILM_EMBEDDING_DIM                                          ║
                 ║ Backend: ONNX Runtime                                      ║
+                ║ Tokenizer: ${if (tokenizerInitialized) "WordPiece (Real)" else "Fallback (Hash)"} ║
                 ╚════════════════════════════════════════════════════════════╝
             """.trimIndent())
             return@withContext true
@@ -261,6 +279,7 @@ class EmbeddingService(private val context: Context) {
     
     /**
      * Generate embedding using ONNX MiniLM model
+     * Generate embedding using ONNX MiniLM model with proper WordPiece tokenization
      */
     private fun embedWithOnnx(text: String): FloatArray {
         val session = ortSession ?: throw IllegalStateException("ONNX session not initialized")
@@ -285,6 +304,33 @@ class EmbeddingService(private val context: Context) {
         
         val tokenTypeIds = LongArray(MAX_SEQ_LENGTH) { 0L }
         
+        // Use proper WordPiece tokenization if available
+        val (inputIds, attentionMask, tokenTypeIds) = if (tokenizerInitialized && tokenizer != null) {
+            val output = tokenizer!!.tokenize(text, addSpecialTokens = true, maxLength = MAX_SEQ_LENGTH)
+            Triple(output.inputIds, output.attentionMask, output.tokenTypeIds)
+        } else {
+            // Fallback to simple tokenization if WordPiece tokenizer not available
+            val tokens = simpleFallbackTokenize(text)
+            val specialTokenIds = tokenizer?.getSpecialTokenIds()
+            val padId = specialTokenIds?.pad?.toLong() ?: 0L
+            val clsId = specialTokenIds?.cls?.toLong() ?: 101L
+            val sepId = specialTokenIds?.sep?.toLong() ?: 102L
+            
+            val ids = LongArray(MAX_SEQ_LENGTH) { i ->
+                when {
+                    i == 0 -> clsId
+                    i < tokens.size + 1 -> tokens[i - 1]
+                    i == tokens.size + 1 -> sepId
+                    else -> padId
+                }
+            }
+            val mask = LongArray(MAX_SEQ_LENGTH) { i ->
+                if (i <= tokens.size + 1) 1L else 0L
+            }
+            val types = LongArray(MAX_SEQ_LENGTH) { 0L }
+            Triple(ids, mask, types)
+        }
+        
         // Create ONNX tensors
         val shape = longArrayOf(1, MAX_SEQ_LENGTH.toLong())
         
@@ -305,6 +351,9 @@ class EmbeddingService(private val context: Context) {
             // MiniLM outputs sentence embedding directly or we need to mean pool
             val outputValue = results[0].value
             
+            // Calculate valid length for mean pooling
+            val validLength = attentionMask.count { it == 1L }
+            
             val embeddings = try {
                 when (outputValue) {
                     is Array<*> -> {
@@ -317,6 +366,7 @@ class EmbeddingService(private val context: Context) {
                                 val sequenceOutput = (firstElement as? Array<FloatArray>)
                                     ?: return generateFallbackEmbedding(text)
                                 meanPool(sequenceOutput, tokens.size + 2) // +2 for CLS and SEP
+                                meanPool(sequenceOutput, validLength)
                             }
                             else -> {
                                 Log.w(TAG, "Unexpected inner output type: ${firstElement?.javaClass}")
@@ -361,6 +411,11 @@ class EmbeddingService(private val context: Context) {
     private fun simpleTokenize(text: String): LongArray {
         // Simple word-based tokenization with hash-based IDs
         // WARNING: This produces embeddings that won't match true MiniLM semantics
+     * Simple fallback tokenization when WordPiece tokenizer is not available
+     * Uses hash-based IDs for backwards compatibility
+     */
+    private fun simpleFallbackTokenize(text: String): LongArray {
+        // Simple word-based tokenization with hash-based IDs
         val words = text.lowercase()
             .replace(Regex("[^a-z0-9\\s]"), " ")
             .split("\\s+".toRegex())
@@ -384,11 +439,13 @@ class EmbeddingService(private val context: Context) {
         for (i in 0 until validLength.coerceAtMost(sequenceOutput.size)) {
             for (j in 0 until dim) {
                 result.set(j, result.get(j) + sequenceOutput[i][j])
+                result[j] += sequenceOutput[i][j]
             }
         }
         
         for (j in 0 until dim) {
             result.set(j, result.get(j) / validLength.toFloat())
+            result[j] /= validLength
         }
         
         return result
@@ -407,6 +464,7 @@ class EmbeddingService(private val context: Context) {
         if (norm > 0) {
             for (i in vec.indices) {
                 vec.set(i, vec.get(i) / norm)
+                vec[i] /= norm
             }
         }
         return vec
@@ -528,6 +586,11 @@ class EmbeddingService(private val context: Context) {
     fun isUsingRealEmbeddings(): Boolean = activeBackend != EmbeddingBackend.FALLBACK
     
     /**
+     * Check if using proper WordPiece tokenization
+     */
+    fun isUsingRealTokenizer(): Boolean = tokenizerInitialized
+    
+    /**
      * Get the active backend name
      */
     fun getActiveBackend(): EmbeddingBackend = activeBackend
@@ -542,6 +605,10 @@ class EmbeddingService(private val context: Context) {
             isRealEmbeddings = isUsingRealEmbeddings(),
             embeddingDimension = getEmbeddingDimension(),
             backend = activeBackend.name
+            isRealTokenizer = isUsingRealTokenizer(),
+            embeddingDimension = getEmbeddingDimension(),
+            backend = activeBackend.name,
+            vocabSize = tokenizer?.getVocabSize() ?: 0
         )
     }
     
@@ -551,6 +618,10 @@ class EmbeddingService(private val context: Context) {
         val isRealEmbeddings: Boolean,
         val embeddingDimension: Int,
         val backend: String
+        val isRealTokenizer: Boolean,
+        val embeddingDimension: Int,
+        val backend: String,
+        val vocabSize: Int
     )
     
     /**

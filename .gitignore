@@ -2,6 +2,14 @@
 bridge/node_modules/
 node_modules/
 
+# Test coverage artifacts
+bridge/coverage/
+coverage/
+
+# Package lock (use npm ci for consistent builds)
+bridge/package-lock.json
+
+
 # Android Build
 android/.gradle/
 android/build/

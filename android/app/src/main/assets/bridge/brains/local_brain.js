@@ -47,56 +47,26 @@ class LocalBrain {
     }
 
     async chat(messages, options = {}) {
-        const models = [this.model, this.fallbackModel];
-        let lastError = null;
-        
-        for (const model of models) {
-            try {
-                console.log(`💭 Attempting inference with ${model}...`);
-                
-                const controller = new AbortController();
-                const timeoutId = setTimeout(() => controller.abort(), this.timeout);
-                
-                const response = await fetch(`${this.baseUrl}/api/chat`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        model: model,
-                        messages: messages,
-                        stream: false,
-                        options: {
-                            temperature: options.temperature || 0.7,
-                            top_k: options.topK || 40,
-                            top_p: options.topP || 0.9,
-                            num_predict: options.maxTokens || 1024
-                        }
-                    }),
-                    signal: controller.signal
-                });
-                
-                clearTimeout(timeoutId);
-
-                if (!response.ok) {
-                    throw new Error(`Ollama API error: ${response.statusText}`);
+        try {
+            let fullContent = '';
+            for await (const chunk of this.chatStream(messages, options)) {
+                fullContent += chunk;
+                if (options.onChunk) {
+                    options.onChunk(chunk);
                 }
-
-                const data = await response.json();
-                console.log(`✅ Inference complete with ${model}`);
-                return data.message; // { role: 'assistant', content: '...' }
-                
-            } catch (error) {
-                console.error(`❌ ${model} failed:`, error.message);
-                lastError = error;
-                continue; // Try next model
             }
+            return {
+                role: 'assistant',
+                content: fullContent
+            };
+        } catch (error) {
+            console.error('Local Brain Chat Error:', error);
+            // Fallback response
+            return {
+                role: 'assistant',
+                content: `I'm having trouble processing that right now. Please ensure Ollama is running with a compatible model (${this.model} or ${this.fallbackModel}).`
+            };
         }
-        
-        // All models failed, return fallback response
-        console.error('All local brain models failed:', lastError?.message);
-        return {
-            role: 'assistant',
-            content: `I'm having trouble processing that right now. Please ensure Ollama is running with a compatible model (${this.model} or ${this.fallbackModel}).`
-        };
     }
 
     // Streaming implementation (Generator) - optimized for TPU

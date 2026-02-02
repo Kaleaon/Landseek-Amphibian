@@ -20,6 +20,7 @@ import com.landseek.amphibian.service.ModelSetManager
 import com.landseek.amphibian.service.OptimizedModelSets
 import com.landseek.amphibian.service.P2PSyncService
 import org.json.JSONArray
+import com.landseek.amphibian.service.P2PSyncService
 
 /**
  * AndroidToolManager
@@ -33,6 +34,7 @@ class AndroidToolManager(
     private val ragService: LocalRAGService,
     private val modelSetManager: ModelSetManager
 ) {
+class AndroidToolManager(private val context: Context) {
 
     private val TAG = "AmphibianTools"
     
@@ -41,11 +43,15 @@ class AndroidToolManager(
 
     data class ToolResult(val success: Boolean, val output: String)
 
+    private val llmService = LocalLLMService(context)
+    private val ragService = LocalRAGService(context)
     private val syncService = P2PSyncService(context, ragService)
     
     init {
         scope.launch { 
             // Services are initialized by AmphibianCoreService
+            ragService.initialize() 
+            llmService.initialize()
             syncService.startServer() // Start listening for peers
         }
     }
@@ -206,5 +212,7 @@ class AndroidToolManager(
     fun destroy() {
         scope.cancel()
         // Services are closed by AmphibianCoreService
+        llmService.close()
+        ragService.close()
     }
 }

@@ -29,11 +29,13 @@ class ModelSetManager(
     private val context: Context,
     private val llmService: LocalLLMService
 ) {
+class ModelSetManager(private val context: Context) {
 
     private val TAG = "AmphibianModelSetMgr"
     
     // Services
     private val tpuService = TPUCapabilityService(context)
+    private var llmService: LocalLLMService? = null
     private var embeddingService: EmbeddingService? = null
     
     // State
@@ -99,6 +101,7 @@ class ModelSetManager(
             _currentModelSet.value = recommendedSet
             
             // Initialize services
+            llmService = LocalLLMService(context)
             embeddingService = EmbeddingService(context)
             
             _isInitialized.value = true
@@ -125,6 +128,7 @@ class ModelSetManager(
      * Scan for available models on device
      */
     fun scanAvailableModels() {
+    private fun scanAvailableModels() {
         val modelsDir = File(context.filesDir, "models")
         if (!modelsDir.exists()) {
             modelsDir.mkdirs()
@@ -204,6 +208,8 @@ class ModelSetManager(
             
             // Initialize LLM with this model
             val success = llmService.initialize()
+            val llm = llmService ?: LocalLLMService(context).also { llmService = it }
+            val success = llm.initialize()
             
             val loadTime = System.currentTimeMillis() - startTime
             
@@ -348,6 +354,7 @@ class ModelSetManager(
     fun close() {
         scope.cancel()
         // llmService is managed by AmphibianCoreService
+        llmService?.close()
         embeddingService?.close()
         _isInitialized.value = false
         Log.d(TAG, "ModelSetManager closed")

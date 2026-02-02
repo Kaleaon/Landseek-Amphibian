@@ -111,6 +111,7 @@ class AmphibianCoreService : Service() {
         
         // Initialize core services
         tpuService = TPUCapabilityService(this)
+        toolManager = AndroidToolManager(this)
         llmService = LocalLLMService(this)
         ragService = LocalRAGService(this)
         
@@ -122,10 +123,7 @@ class AmphibianCoreService : Service() {
         visionService = MediaPipeVisionService(this)
         
         // Initialize Model Set Manager for optimized AI model loading
-        modelSetManager = ModelSetManager(this, llmService)
-
-        // Initialize Tool Manager
-        toolManager = AndroidToolManager(this, llmService, ragService, modelSetManager)
+        modelSetManager = ModelSetManager(this)
         
         createNotificationChannel()
         
@@ -283,6 +281,13 @@ class AmphibianCoreService : Service() {
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to extract Node binary", e)
+            }
+        } else {
+            // Ensure executable if it already exists
+            try {
+                nodeBin.setExecutable(true)
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to set executable permission on existing binary", e)
             }
         }
         
