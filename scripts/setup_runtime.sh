@@ -2,7 +2,7 @@
 set -e
 
 # Configuration
-NODE_VERSION="v22.12.0"
+NODE_VERSION="v18.19.0"
 ARCH="arm64"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
@@ -49,7 +49,7 @@ echo "📥 Downloading Node.js for Android ARM64..."
 echo "   Source: nodejs-mobile project"
 echo ""
 
-DOWNLOAD_URL="https://github.com/nicknisi/nodejs-mobile/releases/download/v18.19.0/nodejs-mobile-v18.19.0-android-arm64.tar.gz"
+DOWNLOAD_URL="https://github.com/nicknisi/nodejs-mobile/releases/download/${NODE_VERSION}/nodejs-mobile-${NODE_VERSION}-android-arm64.tar.gz"
 TEMP_DIR=$(mktemp -d)
 
 # Try to download, fall back to placeholder if network unavailable
