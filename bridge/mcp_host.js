@@ -47,24 +47,23 @@ class AmphibianHost {
      * Aggregate all tools from all connected MCP servers
      */
     async getAllTools() {
-        let allTools = [];
-        
-        for (const [name, client] of this.clients) {
+        const toolPromises = Array.from(this.clients).map(async ([name, client]) => {
             try {
                 const result = await client.listTools();
                 // Prefix tool names to avoid collisions? e.g. "jules_create_session"
-                const tools = result.tools.map(t => ({
+                return result.tools.map(t => ({
                     ...t,
                     name: `${name}_${t.name}`, 
                     server: name
                 }));
-                allTools = allTools.concat(tools);
             } catch (e) {
                 console.error(`Failed to list tools for ${name}:`, e);
+                return [];
             }
-        }
-        
-        return allTools;
+        });
+
+        const results = await Promise.all(toolPromises);
+        return results.flat();
     }
 
     /**
