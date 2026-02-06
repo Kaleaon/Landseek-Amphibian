@@ -20,15 +20,14 @@ const path = require('path');
 const os = require('os');
 const { execSync } = require('child_process');
 
-// Import bridge modules
-const bridgePath = path.join(__dirname, '..', 'bridge');
-const { CollectiveCoordinator, DeviceCapability } = require(path.join(bridgePath, 'collective', 'coordinator'));
-const { CollectiveBrain } = require(path.join(bridgePath, 'collective', 'brain'));
-const { CollectiveClient } = require(path.join(bridgePath, 'collective', 'client'));
-const LocalBrain = require(path.join(bridgePath, 'brains', 'local_brain'));
-const AmphibianHost = require(path.join(bridgePath, 'mcp_host'));
-const { PersonalityManager } = require(path.join(bridgePath, 'personalities'));
-const ConversationMemory = require(path.join(bridgePath, 'brains', 'memory'));
+// Import bridge modules (static paths for pkg bundling)
+const { CollectiveCoordinator, DeviceCapability } = require('../bridge/collective/coordinator');
+const { CollectiveBrain } = require('../bridge/collective/brain');
+const { CollectiveClient } = require('../bridge/collective/client');
+const LocalBrain = require('../bridge/brains/local_brain');
+const AmphibianHost = require('../bridge/mcp_host');
+const { PersonalityManager } = require('../bridge/personalities');
+const ConversationMemory = require('../bridge/brains/memory');
 
 // Import training modules
 const { TrainingCoordinator } = require('./training/coordinator');

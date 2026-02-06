@@ -2,9 +2,10 @@
   "mcpServers": {
     "filesystem": {
       "command": "npx",
-      "args": ["-y", "@modelcontextprotocol/server-filesystem", "./data"],
-      "description": "File system access for reading and writing local files",
-      "enabled": true
+      "args": ["-y", "@modelcontextprotocol/server-filesystem", "."],
+      "description": "File system access for the current working directory",
+      "enabled": false,
+      "_note": "Set enabled:true and change '.' to your desired directory path"
     }
   },
   "_comment": "Add MCP servers here. Each entry needs 'command' and 'args'. Set 'enabled': false to disable without removing. Environment variables go in 'env'. Examples below.",

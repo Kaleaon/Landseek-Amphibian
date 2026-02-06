@@ -14,8 +14,14 @@ desktop/package-lock.json
 # Data directory (created at runtime)
 data/
 
+# Built binaries
+desktop/dist/
+
 # Amphibian user state
 .amphibian/
+
+# JDK downloaded during build
+.jdk/
 
 # Android Build
 android/.gradle/

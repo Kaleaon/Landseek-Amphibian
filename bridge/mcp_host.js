@@ -23,8 +23,8 @@ class AmphibianHost {
     loadConfig() {
         const searchPaths = [
             path.join(process.cwd(), 'mcp.json'),
-            path.join(__dirname, '..', 'mcp.json'),
-            path.join(require('os').homedir(), '.amphibian', 'mcp.json')
+            path.join(require('os').homedir(), '.amphibian', 'mcp.json'),
+            path.join(__dirname, '..', 'mcp.json')
         ];
 
         for (const configPath of searchPaths) {
