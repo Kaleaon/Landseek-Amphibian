@@ -20,6 +20,7 @@ const fs = require('fs').promises;
 const fsSync = require('fs');
 const path = require('path');
 const crypto = require('crypto');
+const { Readable } = require('stream');
 const { pipeline } = require('stream/promises');
 
 // Extension types
@@ -700,16 +701,11 @@ class ExtensionMarketplace {
             
             // Stream download to disk with incremental SHA-256 hash
             const hash = crypto.createHash('sha256');
+            const nodeStream = Readable.fromWeb(response.body);
             const fileStream = fsSync.createWriteStream(archivePath);
-            const body = response.body;
             
-            await new Promise((resolve, reject) => {
-                body.on('data', (chunk) => hash.update(chunk));
-                body.on('error', reject);
-                fileStream.on('error', reject);
-                fileStream.on('finish', resolve);
-                body.pipe(fileStream);
-            });
+            nodeStream.on('data', (chunk) => hash.update(chunk));
+            await pipeline(nodeStream, fileStream);
             
             // Verify checksum if provided
             if (extension.sha256) {
@@ -733,8 +729,9 @@ class ExtensionMarketplace {
                     await fs.rm(installPath, { recursive: true, force: true });
                     throw new Error('Unsafe archive entry (absolute path) detected in extension package');
                 }
-                const normalized = path.normalize(entry);
-                if (normalized.split(path.sep).includes('..')) {
+                // Use posix normalize for cross-platform safety (tar entries use posix paths)
+                const normalized = path.posix.normalize(entry);
+                if (normalized.startsWith('..') || normalized.split('/').includes('..')) {
                     await fs.rm(installPath, { recursive: true, force: true });
                     throw new Error('Unsafe archive entry (path traversal) detected in extension package');
                 }
@@ -781,9 +778,12 @@ module.exports = class ${extension.id.replace(/-/g, '_')} {
             return true;
         }
 
-        const fileBuffer = await fs.readFile(filePath);
-        const hash = crypto.createHash('sha256').update(fileBuffer).digest('hex');
-        return hash === expectedSha256;
+        const hash = crypto.createHash('sha256');
+        const stream = fsSync.createReadStream(filePath);
+        for await (const chunk of stream) {
+            hash.update(chunk);
+        }
+        return hash.digest('hex') === expectedSha256;
     }
     
     getExtensionStatus(extensionId, catalogVersion) {
