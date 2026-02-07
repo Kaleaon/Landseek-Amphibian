@@ -339,7 +339,7 @@ class CollectiveClient {
         // Word-piece style tokenization fallback:
         // Split on whitespace and punctuation boundaries, preserve subword tokens
         const tokens = [];
-        const words = text.split(/(\s+|[.,!?;:'"()\[\]{}])/);
+        const words = text.split(/(\s+|[.,!?;:'"(){}\[\]])/);
         for (const word of words) {
             if (word.trim().length > 0) {
                 tokens.push(word.trim());

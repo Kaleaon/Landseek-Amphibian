@@ -707,9 +707,10 @@ class ExtensionMarketplace {
                 }
             }
             
-            // Extract archive
-            const { execSync } = require('child_process');
-            execSync(`tar -xzf extension.tar.gz`, { cwd: installPath });
+            // Extract archive using execFile with explicit arguments (no shell interpolation)
+            const { execFileSync } = require('child_process');
+            const archiveName = path.basename(archivePath);
+            execFileSync('tar', ['-xzf', archiveName], { cwd: installPath });
             await fs.unlink(archivePath).catch(() => {});
         } else {
             // No download URL - create a minimal extension scaffold
