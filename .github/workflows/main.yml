@@ -43,7 +43,7 @@ jobs:
     - name: Install required Android SDK packages
       run: |
         yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses || true
-        $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "platforms;android-34" "build-tools;34.0.0" "platform-tools"
+        $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "platforms;android-35" "build-tools;35.0.0" "platform-tools"
         echo "Installed SDK packages:"
         $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --list_installed
         
@@ -184,7 +184,7 @@ jobs:
     - name: Install required Android SDK packages
       run: |
         yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses || true
-        $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "platforms;android-34" "build-tools;34.0.0" "platform-tools"
+        $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "platforms;android-35" "build-tools;35.0.0" "platform-tools"
         
     - name: Cache Gradle packages
       uses: actions/cache@v5
@@ -290,7 +290,7 @@ jobs:
             android/app/build/outputs/apk/release/app-release-unsigned.apk \
             "$KEY_ALIAS"
             
-          $ANDROID_HOME/build-tools/34.0.0/zipalign -v 4 \
+          $ANDROID_HOME/build-tools/35.0.0/zipalign -v 4 \
             android/app/build/outputs/apk/release/app-release-unsigned.apk \
             android/app/build/outputs/apk/release/Amphibian-release-signed.apk
             

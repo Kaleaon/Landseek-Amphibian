@@ -24,50 +24,86 @@ class AuthProvider {
     }
 }
 
-// Moltbook Provider (Stub/Simulation)
+// Moltbook Provider
 class MoltbookProvider extends AuthProvider {
     constructor(config) {
         super(config);
         this.name = 'moltbook';
-        // Base URL for Moltbook (fictional for now)
+        // Base URL for Moltbook API
         this.baseUrl = config.baseUrl || 'https://moltbook.com/api/v1';
+        // OAuth base URL (derived once for consistency)
+        this.oauthBaseUrl = config.oauthBaseUrl || new URL('/', this.baseUrl).origin;
     }
 
     getLoginUrl() {
-        // Return a mock URL for now, or the real OAuth endpoint if it existed
         const clientId = this.config.clientId || 'amphibian_client';
         const redirectUri = this.config.redirectUri || 'http://localhost:3000/auth/moltbook/callback';
-        return `https://moltbook.com/oauth/authorize?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code`;
+        return `${this.oauthBaseUrl}/oauth/authorize?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code`;
     }
 
     async handleCallback(code) {
-        // Simulate exchanging code for token
-        console.log(`[MoltbookProvider] Exchanging code: ${code}`);
+        console.log(`[MoltbookProvider] Exchanging code for token`);
 
-        // In a real implementation, we would POST to /oauth/token
-        // For now, return a mock token
-        return {
-            accessToken: 'mock_access_token_' + Date.now(),
-            refreshToken: 'mock_refresh_token_' + Date.now(),
-            expiresIn: 3600
-        };
+        const clientId = this.config.clientId || 'amphibian_client';
+        const clientSecret = this.config.clientSecret || '';
+        const redirectUri = this.config.redirectUri || 'http://localhost:3000/auth/moltbook/callback';
+
+        try {
+            const response = await fetch(`${this.oauthBaseUrl}/oauth/token`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    grant_type: 'authorization_code',
+                    code,
+                    client_id: clientId,
+                    client_secret: clientSecret,
+                    redirect_uri: redirectUri
+                })
+            });
+
+            if (!response.ok) {
+                throw new Error(`Token exchange failed: ${response.status} ${response.statusText}`);
+            }
+
+            const data = await response.json();
+            return {
+                accessToken: data.access_token,
+                refreshToken: data.refresh_token,
+                expiresIn: data.expires_in || 3600
+            };
+        } catch (error) {
+            console.error(`[MoltbookProvider] Token exchange error: ${error.message}`);
+            throw error;
+        }
     }
 
     async getProfile(accessToken) {
-        // Simulate fetching user profile
-        console.log(`[MoltbookProvider] Fetching profile with token: ${accessToken}`);
+        console.log(`[MoltbookProvider] Fetching profile`);
 
-        // Return mock data that resembles expected Moltbook API response
-        return new MoltbookIdentity({
-            userId: 'mb_12345678',
-            username: 'AmphibianAgent',
-            karma: 150,
-            accountAgeDays: 45,
-            isVerified: true,
-            isFlagged: false,
-            badges: ['beta_tester', 'verified_agent'],
-            lastSynced: new Date().toISOString()
-        });
+        try {
+            const response = await fetch(`${this.baseUrl}/users/me`, {
+                headers: { 'Authorization': `Bearer ${accessToken}` }
+            });
+
+            if (!response.ok) {
+                throw new Error(`Profile fetch failed: ${response.status} ${response.statusText}`);
+            }
+
+            const data = await response.json();
+            return new MoltbookIdentity({
+                userId: data.user_id || data.id,
+                username: data.username,
+                karma: data.karma || 0,
+                accountAgeDays: data.account_age_days || 0,
+                isVerified: data.is_verified || false,
+                isFlagged: data.is_flagged || false,
+                badges: data.badges || [],
+                lastSynced: new Date().toISOString()
+            });
+        } catch (error) {
+            console.error(`[MoltbookProvider] Profile fetch error: ${error.message}`);
+            throw error;
+        }
     }
 }
 

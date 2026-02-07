@@ -233,4 +233,75 @@ describe('ExtensionMarketplace with Moltbook Catalog', () => {
             expect(tags).toContain('identity');
         });
     });
+
+    describe('verifyChecksum', () => {
+        it('should return true for matching checksum', async () => {
+            const filePath = path.join(testDir, 'test-file.txt');
+            const content = 'test content for checksum';
+            await fs.writeFile(filePath, content);
+            
+            const crypto = require('crypto');
+            const expectedHash = crypto.createHash('sha256').update(content).digest('hex');
+            
+            const result = await marketplace.verifyChecksum(filePath, expectedHash);
+            expect(result).toBe(true);
+        });
+
+        it('should return false for mismatched checksum', async () => {
+            const filePath = path.join(testDir, 'test-file.txt');
+            await fs.writeFile(filePath, 'test content');
+            
+            const result = await marketplace.verifyChecksum(filePath, 'invalid_hash');
+            expect(result).toBe(false);
+        });
+
+        it('should return false for non-existent file', async () => {
+            const result = await marketplace.verifyChecksum('/tmp/does-not-exist-' + Date.now(), 'abc');
+            expect(result).toBe(false);
+        });
+
+        it('should return true when given a directory path (skip verification)', async () => {
+            const dirPath = path.join(testDir, 'some-dir');
+            await fs.mkdir(dirPath, { recursive: true });
+            
+            const result = await marketplace.verifyChecksum(dirPath, 'any_hash');
+            expect(result).toBe(true);
+        });
+    });
+
+    describe('downloadExtension', () => {
+        it('should create scaffold when no downloadUrl is provided', async () => {
+            const extension = {
+                id: 'test-ext',
+                name: 'Test Extension'
+            };
+            
+            const installPath = await marketplace.downloadExtension(extension);
+            expect(installPath).toContain('test-ext');
+            
+            const indexPath = path.join(installPath, 'index.js');
+            const content = await fs.readFile(indexPath, 'utf8');
+            expect(content).toContain('Test Extension');
+        });
+
+        it('should throw on failed download response', async () => {
+            const originalFetch = global.fetch;
+            global.fetch = jest.fn().mockResolvedValue({
+                ok: false,
+                status: 404,
+                statusText: 'Not Found'
+            });
+            
+            const extension = {
+                id: 'fail-ext',
+                name: 'Failing Extension',
+                downloadUrl: 'https://example.com/ext.tar.gz'
+            };
+            
+            await expect(marketplace.downloadExtension(extension))
+                .rejects.toThrow('Download failed: 404 Not Found');
+            
+            global.fetch = originalFetch;
+        });
+    });
 });

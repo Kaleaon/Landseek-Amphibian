@@ -2,6 +2,8 @@ package com.landseek.amphibian.tools
 
 import android.content.Context
 import android.content.Intent
+import android.location.Location
+import android.location.LocationManager
 import android.net.Uri
 import android.telephony.SmsManager
 import android.util.Log
@@ -112,8 +114,31 @@ class AndroidToolManager(
     }
 
     private fun getLocation(): ToolResult {
-        // Placeholder for FusedLocationProvider implementation
-        return ToolResult(true, "Lat: 37.7749, Long: -122.4194 (Mock)")
+        return try {
+            val locationManager = context.getSystemService(Context.LOCATION_SERVICE) as LocationManager
+            // Try GPS first, then Network provider
+            val providers = listOf(LocationManager.GPS_PROVIDER, LocationManager.NETWORK_PROVIDER)
+            var bestLocation: Location? = null
+            for (provider in providers) {
+                if (!locationManager.isProviderEnabled(provider)) continue
+                try {
+                    @Suppress("MissingPermission")
+                    val location = locationManager.getLastKnownLocation(provider)
+                    if (location != null && (bestLocation == null || location.accuracy < bestLocation!!.accuracy)) {
+                        bestLocation = location
+                    }
+                } catch (_: SecurityException) {
+                    // Permission not granted for this provider
+                }
+            }
+            if (bestLocation != null) {
+                ToolResult(true, "Lat: ${bestLocation.latitude}, Long: ${bestLocation.longitude}")
+            } else {
+                ToolResult(false, "Location unavailable. Ensure location permissions are granted and location services are enabled.")
+            }
+        } catch (e: Exception) {
+            ToolResult(false, "Failed to get location: ${e.message}")
+        }
     }
 
     private fun openUrl(url: String): ToolResult {

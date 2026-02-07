@@ -331,9 +331,21 @@ class CollectiveClient {
     async executeTokenizeTask(payload) {
         const { text } = payload;
         
-        // Simple whitespace tokenization as fallback
-        // Real implementation would use model-specific tokenizer
-        return text.split(/\s+/).filter(t => t.length > 0);
+        // Use local brain tokenizer if available
+        if (this.localBrain && this.localBrain.tokenize) {
+            return await this.localBrain.tokenize(text);
+        }
+        
+        // Word-piece style tokenization fallback:
+        // Split on whitespace and punctuation boundaries, preserve subword tokens
+        const tokens = [];
+        const words = text.split(/(\s+|[.,!?;:'"(){}\[\]])/);
+        for (const word of words) {
+            if (word.trim().length > 0) {
+                tokens.push(word.trim());
+            }
+        }
+        return tokens;
     }
 
     /**

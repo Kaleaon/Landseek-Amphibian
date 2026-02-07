@@ -17,8 +17,11 @@
  */
 
 const fs = require('fs').promises;
+const fsSync = require('fs');
 const path = require('path');
 const crypto = require('crypto');
+const { Readable } = require('stream');
+const { pipeline } = require('stream/promises');
 
 // Extension types
 const ExtensionType = {
@@ -686,14 +689,61 @@ class ExtensionMarketplace {
     }
     
     async downloadExtension(extension) {
-        // In production, this would download from extension.downloadUrl
-        // For now, create a mock structure
         const installPath = path.join(this.extensionsDir, extension.id);
         await fs.mkdir(installPath, { recursive: true });
         
-        // Create a placeholder file
-        const indexContent = `
-// ${extension.name} - Mock Extension
+        if (extension.downloadUrl) {
+            const response = await fetch(extension.downloadUrl);
+            if (!response.ok) {
+                throw new Error(`Download failed: ${response.status} ${response.statusText}`);
+            }
+            const archivePath = path.join(installPath, 'extension.tar.gz');
+            
+            // Stream download to disk with incremental SHA-256 hash
+            const hash = crypto.createHash('sha256');
+            const nodeStream = Readable.fromWeb(response.body);
+            const fileStream = fsSync.createWriteStream(archivePath);
+            
+            nodeStream.on('data', (chunk) => hash.update(chunk));
+            await pipeline(nodeStream, fileStream);
+            
+            // Verify checksum if provided
+            if (extension.sha256) {
+                const digest = hash.digest('hex');
+                if (digest !== extension.sha256) {
+                    await fs.rm(installPath, { recursive: true, force: true });
+                    throw new Error('Checksum verification failed - download may be corrupted');
+                }
+            }
+            
+            // Validate archive entries for path traversal before extraction
+            const { execFileSync } = require('child_process');
+            const archiveName = path.basename(archivePath);
+            const listOutput = execFileSync('tar', ['-tzf', archiveName], {
+                cwd: installPath,
+                encoding: 'utf8'
+            });
+            const entries = listOutput.split('\n').filter(Boolean);
+            for (const entry of entries) {
+                if (entry.startsWith('/') || entry.startsWith('\\')) {
+                    await fs.rm(installPath, { recursive: true, force: true });
+                    throw new Error('Unsafe archive entry (absolute path) detected in extension package');
+                }
+                // Use posix normalize for cross-platform safety (tar entries use posix paths)
+                const normalized = path.posix.normalize(entry);
+                if (normalized.startsWith('..') || normalized.split('/').includes('..')) {
+                    await fs.rm(installPath, { recursive: true, force: true });
+                    throw new Error('Unsafe archive entry (path traversal) detected in extension package');
+                }
+            }
+            
+            // Safe to extract after validation
+            execFileSync('tar', ['-xzf', archiveName], { cwd: installPath });
+            await fs.unlink(archivePath).catch(() => {});
+        } else {
+            // No download URL - create a minimal extension scaffold
+            const indexContent = `
+// ${extension.name} - Extension
 module.exports = class ${extension.id.replace(/-/g, '_')} {
     constructor() {
         console.log('Extension loaded: ${extension.name}');
@@ -708,15 +758,32 @@ module.exports = class ${extension.id.replace(/-/g, '_')} {
     }
 };
 `;
-        await fs.writeFile(path.join(installPath, 'index.js'), indexContent);
+            await fs.writeFile(path.join(installPath, 'index.js'), indexContent);
+        }
         
         return installPath;
     }
     
     async verifyChecksum(filePath, expectedSha256) {
-        // In production, calculate actual checksum
-        // For now, return true
-        return true;
+        let stats;
+        try {
+            stats = await fs.lstat(filePath);
+        } catch (err) {
+            return false;
+        }
+
+        // If the path is not a regular file (e.g. a directory), skip verification.
+        // The archive is already verified before extraction in downloadExtension().
+        if (!stats.isFile()) {
+            return true;
+        }
+
+        const hash = crypto.createHash('sha256');
+        const stream = fsSync.createReadStream(filePath);
+        for await (const chunk of stream) {
+            hash.update(chunk);
+        }
+        return hash.digest('hex') === expectedSha256;
     }
     
     getExtensionStatus(extensionId, catalogVersion) {

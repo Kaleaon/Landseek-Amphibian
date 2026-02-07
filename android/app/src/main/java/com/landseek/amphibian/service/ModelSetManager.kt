@@ -244,14 +244,14 @@ class ModelSetManager(
     }
     
     /**
-     * Get download URL for a model (placeholder - would connect to model repository)
+     * Get download URL for a model from HuggingFace repositories
      */
     private fun getModelDownloadUrl(filename: String): String? {
-        // In production, this would return actual download URLs from HuggingFace or similar
         return when {
-            filename.contains("gemma") -> "https://huggingface.co/google/gemma-models"
-            filename.contains("codellama") -> "https://huggingface.co/codellama/CodeLlama-models"
-            filename.contains("MiniLM") -> "https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2"
+            filename.contains("gemma-3-4b") -> "https://huggingface.co/google/gemma-3-4b-it/resolve/main/$filename"
+            filename.contains("gemma") -> "https://huggingface.co/google/gemma-3-1b-it/resolve/main/$filename"
+            filename.contains("codellama") -> "https://huggingface.co/codellama/CodeLlama-7b-hf/resolve/main/$filename"
+            filename.contains("MiniLM") || filename.contains("minilm") -> "https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/$filename"
             else -> null
         }
     }
