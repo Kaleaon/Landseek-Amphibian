@@ -29,14 +29,16 @@ class MoltbookProvider extends AuthProvider {
     constructor(config) {
         super(config);
         this.name = 'moltbook';
-        // Base URL for Moltbook
+        // Base URL for Moltbook API
         this.baseUrl = config.baseUrl || 'https://moltbook.com/api/v1';
+        // OAuth base URL (derived once for consistency)
+        this.oauthBaseUrl = config.oauthBaseUrl || new URL('/', this.baseUrl).origin;
     }
 
     getLoginUrl() {
         const clientId = this.config.clientId || 'amphibian_client';
         const redirectUri = this.config.redirectUri || 'http://localhost:3000/auth/moltbook/callback';
-        return `${this.baseUrl.replace('/api/v1', '')}/oauth/authorize?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code`;
+        return `${this.oauthBaseUrl}/oauth/authorize?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code`;
     }
 
     async handleCallback(code) {
@@ -47,7 +49,7 @@ class MoltbookProvider extends AuthProvider {
         const redirectUri = this.config.redirectUri || 'http://localhost:3000/auth/moltbook/callback';
 
         try {
-            const response = await fetch(`${this.baseUrl}/oauth/token`, {
+            const response = await fetch(`${this.oauthBaseUrl}/oauth/token`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({

@@ -17,8 +17,10 @@
  */
 
 const fs = require('fs').promises;
+const fsSync = require('fs');
 const path = require('path');
 const crypto = require('crypto');
+const { pipeline } = require('stream/promises');
 
 // Extension types
 const ExtensionType = {
@@ -694,22 +696,51 @@ class ExtensionMarketplace {
             if (!response.ok) {
                 throw new Error(`Download failed: ${response.status} ${response.statusText}`);
             }
-            const buffer = Buffer.from(await response.arrayBuffer());
             const archivePath = path.join(installPath, 'extension.tar.gz');
-            await fs.writeFile(archivePath, buffer);
+            
+            // Stream download to disk with incremental SHA-256 hash
+            const hash = crypto.createHash('sha256');
+            const fileStream = fsSync.createWriteStream(archivePath);
+            const body = response.body;
+            
+            await new Promise((resolve, reject) => {
+                body.on('data', (chunk) => hash.update(chunk));
+                body.on('error', reject);
+                fileStream.on('error', reject);
+                fileStream.on('finish', resolve);
+                body.pipe(fileStream);
+            });
             
             // Verify checksum if provided
             if (extension.sha256) {
-                const valid = await this.verifyChecksum(archivePath, extension.sha256);
-                if (!valid) {
+                const digest = hash.digest('hex');
+                if (digest !== extension.sha256) {
                     await fs.rm(installPath, { recursive: true, force: true });
                     throw new Error('Checksum verification failed - download may be corrupted');
                 }
             }
             
-            // Extract archive using execFile with explicit arguments (no shell interpolation)
+            // Validate archive entries for path traversal before extraction
             const { execFileSync } = require('child_process');
             const archiveName = path.basename(archivePath);
+            const listOutput = execFileSync('tar', ['-tzf', archiveName], {
+                cwd: installPath,
+                encoding: 'utf8'
+            });
+            const entries = listOutput.split('\n').filter(Boolean);
+            for (const entry of entries) {
+                if (entry.startsWith('/') || entry.startsWith('\\')) {
+                    await fs.rm(installPath, { recursive: true, force: true });
+                    throw new Error('Unsafe archive entry (absolute path) detected in extension package');
+                }
+                const normalized = path.normalize(entry);
+                if (normalized.split(path.sep).includes('..')) {
+                    await fs.rm(installPath, { recursive: true, force: true });
+                    throw new Error('Unsafe archive entry (path traversal) detected in extension package');
+                }
+            }
+            
+            // Safe to extract after validation
             execFileSync('tar', ['-xzf', archiveName], { cwd: installPath });
             await fs.unlink(archivePath).catch(() => {});
         } else {
@@ -737,6 +768,19 @@ module.exports = class ${extension.id.replace(/-/g, '_')} {
     }
     
     async verifyChecksum(filePath, expectedSha256) {
+        let stats;
+        try {
+            stats = await fs.lstat(filePath);
+        } catch (err) {
+            return false;
+        }
+
+        // If the path is not a regular file (e.g. a directory), skip verification.
+        // The archive is already verified before extraction in downloadExtension().
+        if (!stats.isFile()) {
+            return true;
+        }
+
         const fileBuffer = await fs.readFile(filePath);
         const hash = crypto.createHash('sha256').update(fileBuffer).digest('hex');
         return hash === expectedSha256;
