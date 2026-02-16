@@ -67,6 +67,7 @@ class TriggerStore private constructor(private val context: Context) {
         }
     }
 
+    @Synchronized
     fun getTrigger(triggerId: String): Trigger? {
         return getAllTriggers().find { it.id == triggerId }
     }
