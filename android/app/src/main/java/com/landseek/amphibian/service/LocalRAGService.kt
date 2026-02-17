@@ -43,9 +43,15 @@ class LocalRAGService(private val context: Context) {
     suspend fun initialize(): Boolean = withContext(Dispatchers.IO) {
         Log.d(TAG, "Initializing Local RAG with TPU support...")
 
-        // Initialize embedding service
-        embeddingService = EmbeddingService(context)
-        useRealEmbeddings = embeddingService?.initialize() == true
+        try {
+            // Initialize embedding service
+            embeddingService = EmbeddingService(context)
+            useRealEmbeddings = embeddingService?.initialize() == true
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to initialize EmbeddingService, falling back to mock embeddings", e)
+            embeddingService = null
+            useRealEmbeddings = false
+        }
 
         if (useRealEmbeddings) {
             Log.i(TAG, "✅ Using TPU-accelerated embeddings!")
