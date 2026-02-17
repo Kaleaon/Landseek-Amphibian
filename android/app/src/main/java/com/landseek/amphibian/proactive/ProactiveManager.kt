@@ -50,22 +50,27 @@ class ProactiveManager(private val context: Context) {
             if (checkCondition(trigger, now)) {
                 Log.d(TAG, "Trigger fired: ${trigger.id}")
 
+                var actionExecuted = false
                 // Permission check for Notifications
                 if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
                     if (ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS)
                         == PackageManager.PERMISSION_GRANTED) {
                         dispatcher.dispatch(trigger)
+                        actionExecuted = true
                     } else {
                         Log.w(TAG, "Cannot dispatch notification: Permission denied")
                     }
                 } else {
                     dispatcher.dispatch(trigger)
+                    actionExecuted = true
                 }
 
-                // Update trigger state in memory
-                val updatedTrigger = trigger.copy(lastRun = now)
-                triggers[i] = updatedTrigger
-                hasChanges = true
+                if (actionExecuted) {
+                    // Update trigger state in memory
+                    val updatedTrigger = trigger.copy(lastRun = now)
+                    triggers[i] = updatedTrigger
+                    hasChanges = true
+                }
             }
         }
 
