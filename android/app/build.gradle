@@ -7,6 +7,24 @@ android {
     namespace 'com.landseek.amphibian'
     compileSdk 35
 
+    // Load signing properties from local.properties
+    def keystorePropertiesFile = rootProject.file('local.properties')
+    def keystoreProperties = new Properties()
+    if (keystorePropertiesFile.exists()) {
+        keystoreProperties.load(new FileInputStream(keystorePropertiesFile))
+    }
+
+    signingConfigs {
+        release {
+            if (keystoreProperties.containsKey('storeFile')) {
+                storeFile file(keystoreProperties['storeFile'])
+                storePassword keystoreProperties['storePassword']
+                keyAlias keystoreProperties['keyAlias']
+                keyPassword keystoreProperties['keyPassword']
+            }
+        }
+    }
+
     defaultConfig {
         applicationId "com.landseek.amphibian"
         minSdk 29
@@ -32,7 +50,11 @@ android {
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
             
             // Signing config for release (configure in local.properties)
-            signingConfig signingConfigs.debug // TODO: Replace with release signing
+            if (signingConfigs.release.storeFile != null) {
+                signingConfig signingConfigs.release
+            } else {
+                signingConfig signingConfigs.debug
+            }
         }
         debug {
             debuggable true
