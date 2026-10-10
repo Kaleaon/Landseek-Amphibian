@@ -148,7 +148,7 @@ dependencies {
     
     // ONNX Runtime for real semantic embeddings (ToolNeuron integration)
     // Supports all-MiniLM-L6-v2 model for 384-dim semantic embeddings
-    implementation 'com.microsoft.onnxruntime:onnxruntime-android:1.16.0'
+    implementation 'com.microsoft.onnxruntime:onnxruntime-android:1.30.0'
     
     // Document Processing Libraries (ToolNeuron integration)
     // PDF parsing
